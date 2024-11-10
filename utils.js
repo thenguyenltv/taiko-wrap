@@ -110,18 +110,6 @@ async function deposit(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
     const gas_price = await poolingGas(140000002n);
     const max_priority_fee_per_gas = gas_price * BigInt(100) / BigInt(100);
     const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
-  
-    // Create the transaction object (type 0)
-    // const tx_params = {
-    //   from: account.address,
-    //   to: SM_USE.options.address,
-    //   value: amount,
-    //   gas: estimatedGas,
-    //   gasPrice,
-    //   gasLimit: gas_limit,
-    //   nonce,
-    //   data: txData
-    // };
 
     /** Transaction type 2 */
     const tx_params = {
@@ -177,17 +165,6 @@ async function withdraw(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
     const gas_price = await poolingGas(140000002n);
     const max_priority_fee_per_gas = gas_price * BigInt(100 + 0) / BigInt(100);
     const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
-    
-    /** Create the transaction object (Type 0) */
-    // const tx_params = {
-    //   from: account.address,
-    //   to: SM_USE.options.address,
-    //   gas: estimatedGas + estimatedGas * BigInt(1) / BigInt(100),
-    //   gasPrice,
-    //   gasLimit: gas_limit,
-    //   nonce,
-    //   data: txData,
-    // };
 
     /** Transaction type 2 */
     const tx_params = {

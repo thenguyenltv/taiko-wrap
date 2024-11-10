@@ -27,10 +27,6 @@ const {
 const RPC_URL = process.env.RPC_URL;
 const PRIK = process.env.KEY;
 
-// const TNX_AMOUNT = process.argv[3]; // Number of transactions
-// const POINTS_AMOUNT = process.argv[2]; // Number of gas points to reach
-// let GAS_FEE_INCREASE_PERCENT = process.argv[3]; // Increase gas fee by %
-
 const web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
 const SM_WRAP = new web3.eth.Contract(SM_ABI, SM_ADDRESS);
 const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
@@ -47,14 +43,10 @@ const chainID = _chooseSM === 0 ? Mainnet : Testnet;
 const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
 const MIN_BALANCE = 0.0004; // ETH units, the minimum balance to keep in the account
-const CAIL_GAS = 140000002n;
+const CEIL_GAS = 140000002n; // 0.14 gwei
 let runningIncreaseGas = 0;
 
-const gasMultiplier = 80000; 
 const eth_price = 3150;
-
-// let maxPointForGas = parseInt(POINTS_AMOUNT) || 0; 
-// let maxTnx = parseInt(TNX_AMOUNT) || 0;
 
 console.log("o __________________ CONTRACT _________________");
 console.log("o", SM_USE.options.address);
@@ -75,7 +67,7 @@ async function main() {
     let num_tnx = Math.ceil(74000 / (1.5 * eth_price *  balance)) * 2;
     console.log("\nStart auto wrap/unwrap", num_tnx, "times");
 
-    let gasPrice = await poolingGas(CAIL_GAS);
+    let gasPrice = await poolingGas(CEIL_GAS);
     console.log("Gas Price:", gasPrice);
     
     await new Promise((resolve) => setTimeout(resolve, 10000));
