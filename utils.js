@@ -2,6 +2,34 @@ const { Web3, types } = require('web3');
 
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
 
+const { 
+  LOG_FILE,
+  Mainnet,
+  Testnet
+} = require('./constant');
+
+const fs = require('fs');
+const path = require('path');
+
+// Define the log file path
+const logFilePath = path.join(__dirname, LOG_FILE);
+
+/**
+ * Function to log messages to the file
+ * @param {*} message 
+ */
+function logMessage(message) {
+  const timestamp = new Date().toISOString(); // Add a timestamp
+  const log = `[${timestamp}] ${message}\n`;
+
+  // Append the log message to the file
+  fs.appendFile(logFilePath, log, (err) => {
+    if (err) {
+      console.error('Failed to write log:', err);
+    }
+  });
+}
+
 /**
  * Rounds a BigInt in WEI to a specified number of decimal places.
  * 
@@ -97,18 +125,19 @@ async function getEthPrice() {
  * 
  * Function to deposit funds to the wrapped token contract
  */
-async function deposit(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
+async function deposit(SM_USE, amount, account, MAX_GAS) {
   try {
     // Prepare the transaction
     const amountInEther = web3.utils.fromWei(amount, 'ether');
     // const gasPrice = (await web3.eth.getGasPrice()) * BigInt(100 + GAS_FEE_INCREASE_PERCENT) / BigInt(100);
     const estimatedGas = await SM_USE.methods.deposit(amountInEther).estimateGas();
-    const gas_limit = estimatedGas * BigInt(2);
+    const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
     const txData = SM_USE.methods.deposit(amountInEther).encodeABI();
 
-    const gas_price = await poolingGas(140000002n);
-    const max_priority_fee_per_gas = gas_price * BigInt(100) / BigInt(100);
+    const gas_price = await poolingGas(MAX_GAS);
+    // const gas_price = 180000002n;
+    const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
     const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
 
     /** Transaction type 2 */
@@ -122,6 +151,7 @@ async function deposit(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
       maxFeePerGas: max_fee_per_gas,
       gasLimit: gas_limit,
       type: '0x2',
+      chainID: Mainnet
     };
 
     // double check the balance
@@ -148,12 +178,11 @@ async function deposit(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
  * 
  * Function to withdraw funds from the wrapped token contract
 */
-async function withdraw(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
+async function withdraw(SM_USE, amount, account, MAX_GAS) {
   try {
     // Prepare the transaction
     let newAmount = amount - (amount / BigInt(500));
     const txData = SM_USE.methods.withdraw(newAmount).encodeABI();
-    // const gasPrice = (await web3.eth.getGasPrice()) * BigInt(100 + GAS_FEE_INCREASE_PERCENT) / BigInt(100);
     const estimatedGas = await web3.eth.estimateGas({
       from: account.address,
       to: SM_USE.options.address,
@@ -161,9 +190,8 @@ async function withdraw(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
     });
     const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
-
-    const gas_price = await poolingGas(140000002n);
-    const max_priority_fee_per_gas = gas_price * BigInt(100 + 0) / BigInt(100);
+    const gas_price = await poolingGas(MAX_GAS);
+    const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
     const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
 
     /** Transaction type 2 */
@@ -176,7 +204,7 @@ async function withdraw(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
       maxFeePerGas: max_fee_per_gas,
       gasLimit: gas_limit,
       type: '0x2',
-      chainID: 167000
+      chainID: Mainnet
     };
 
     // double check the balance
@@ -201,7 +229,7 @@ async function withdraw(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT) {
 /**
  * loop deposit and withdraw
  */
-async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, GAS_FEE_INCREASE_PERCENT) {
+async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS) {
   const min_eth = web3.utils.toWei(MIN_BALANCE.toString(), 'ether');
   let status = true;
   let fee = 0n;
@@ -214,7 +242,7 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, GAS_FEE
       const amount = balance - BigInt(min_eth / 2);
       
       console.log(`\n${indexTnx + 1}. Deposit...`, roundNumber(amount), "ETH to WETH");
-      const [receipt, pre_gas] = await deposit(SM_USE, amount, account, GAS_FEE_INCREASE_PERCENT);
+      const [receipt, pre_gas] = await deposit(SM_USE, amount, account, MAX_GAS);
       
       await new Promise((resolve) => setTimeout(resolve, 5000));
       
@@ -232,7 +260,7 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, GAS_FEE
       const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
       
       console.log(`\n${indexTnx + 1}. Withdraw...`, roundNumber(balanceOf), "WETH to ETH");
-      const [receipt, pre_gas] = await withdraw(SM_USE, balanceOf, account, GAS_FEE_INCREASE_PERCENT);
+      const [receipt, pre_gas] = await withdraw(SM_USE, balanceOf, account, MAX_GAS);
       
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
@@ -291,5 +319,6 @@ module.exports = {
   DepositOrWithdraw,
   roundNumber,
   getTransactionFee,
-  poolingGas
+  poolingGas,
+  logMessage
 };
