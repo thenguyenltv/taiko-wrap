@@ -69,13 +69,11 @@ async function main() {
     let gasPrice = await poolingGas(CEIL_GAS);
     console.log("Gas Price:", gasPrice);
     
-    await new Promise((resolve) => setTimeout(resolve, 10000));
-
     const StartNonce = await handleError(web3.eth.getTransactionCount(account.address));
     let total_fee = 0;
     let countFailed = 0, countSuccess = 0;
     let tnx_count = 0;
-    let delayFailedTime = 30000; // 1 minute
+    let delayFailedTime = 10000; // 1 minute
     let start = new Date().getTime();
 
     while (tnx_count < num_tnx) {
@@ -84,7 +82,6 @@ async function main() {
         if (balance > BigInt(web3.utils.toWei(MIN_BALANCE.toString(), 'ether'))) {
           num_tnx += 1;
         }
-
       }
       let resultTxn = { status: false, fee: 0n };
 
@@ -102,8 +99,7 @@ async function main() {
         tnx_count++;
         countSuccess++;
         countFailed = 0;
-      total_fee += roundNumber(resultTxn.fee, 18, 8);
-
+        total_fee += roundNumber(resultTxn.fee, 18, 8);
         console.log("Waiting for the next transaction...", total_fee);
       }
       else {

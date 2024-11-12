@@ -167,6 +167,7 @@ async function deposit(SM_USE, amount, account, MAX_GAS) {
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
 
     const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas);
+
     return [receipt, pre_gas];
   } catch (error) {
     console.error("An error occurred while preparing or sending the transaction:", error.message);
@@ -233,6 +234,7 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
   const min_eth = web3.utils.toWei(MIN_BALANCE.toString(), 'ether');
   let status = true;
   let fee = 0n;
+  let [receipt, pre_gas] = [[true, 0n], 0n];
 
   try {
     const balance = await web3.eth.getBalance(account.address);
@@ -242,16 +244,19 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
       const amount = balance - BigInt(min_eth / 2);
       
       console.log(`\n${indexTnx + 1}. Deposit...`, roundNumber(amount), "ETH to WETH");
-      const [receipt, pre_gas] = await deposit(SM_USE, amount, account, MAX_GAS);
-      
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      [receipt, pre_gas] = await deposit(SM_USE, amount, account, MAX_GAS);      
       await new Promise((resolve) => setTimeout(resolve, 5000));
       
-      fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : 0n;
-      if (fee === 0n) {
-        console.log("Receipt of transaction is undefined");
-        await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
-        fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
+      if (receipt !== undefined) {
+        fee = await getTransactionFee(receipt.transactionHash);
       }
+      // fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : 0n;
+      // if (fee === 0n) {
+      //   console.log("Receipt of transaction is undefined");
+      //   await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
+      //   fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
+      // }
       console.log("Fee:", roundNumber(fee, 18, 8));
       
       return { status, fee };
@@ -260,16 +265,19 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
       const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
       
       console.log(`\n${indexTnx + 1}. Withdraw...`, roundNumber(balanceOf), "WETH to ETH");
-      const [receipt, pre_gas] = await withdraw(SM_USE, balanceOf, account, MAX_GAS);
-      
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      [receipt, pre_gas] = await withdraw(SM_USE, balanceOf, account, MAX_GAS);
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
-      fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : 0n;
-      if (fee === 0n) {
-        console.log("Receipt of transaction is undefined");
-        await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
-        fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
+      if (receipt !== undefined) {
+        fee = await getTransactionFee(receipt.transactionHash);
       }
+      // fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : 0n;
+      // if (fee === 0n) {
+      //   console.log("Receipt of transaction is undefined");
+      //   await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
+      //   fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
+      // }
       console.log("Fee:", roundNumber(fee, 18, 8));
       
       return { status, fee };
@@ -280,10 +288,9 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
     // Xu ly Transaction not found 
     if (err.message.includes("Transaction not found")) {
       await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
-      fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : 0n;
-      
-      if (fee == 0n) status = false;
+      fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
     }
+    if (fee == 0n) status = false;
 
     return { status, fee };
   }
