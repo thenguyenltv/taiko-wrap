@@ -1,5 +1,7 @@
 module.exports = {
-    RPC_URL: "https://rpc.ankr.com/taiko/a4d0b9019e455492c401aa9499bb36139980e8772bb41b304c4cd2afd4443a42", 
+  ETH_PRICE: 3230,
+  LOG_FILE: "wrap_log.log",
+  RPC_URL: "https://rpc.ankr.com/taiko/a4d0b9019e455492c401aa9499bb36139980e8772bb41b304c4cd2afd4443a42", 
     // https://rpc.mainnet.taiko.xyz
     // https://rpc.taiko.xyz
     // https://mainnet.taiko-rpc.com/
@@ -10,6 +12,9 @@ module.exports = {
 
     SM_ADDRESS: "0xA51894664A773981C6C112C43ce576f315d5b1B6", 
     TEST_SM_WETH: '0xae2C46ddb314B9Ba743C6dEE4878F151881333D9',
+
+    Mainnet: 167000,
+    Testnet: 167009,
 
     SM_ABI: [
         {
@@ -569,8 +574,5 @@ module.exports = {
           "name": "Withdrawal",
           "type": "event"
         }
-      ],
-
-    Mainnet: 167000,
-    Testnet: 167009
+      ]
   };
