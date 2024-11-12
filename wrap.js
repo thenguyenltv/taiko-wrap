@@ -7,7 +7,8 @@ const {
   DepositOrWithdraw,
   roundNumber,
   getTransactionFee,
-  poolingGas
+  poolingGas,
+  logMessage
 } = require('./utils');
 
 const readline = require('readline').createInterface({
@@ -16,6 +17,7 @@ const readline = require('readline').createInterface({
 });
 
 const { 
+  ETH_PRICE,
   SM_ADDRESS, 
   SM_ABI, 
   TEST_SM_WETH, 
@@ -26,34 +28,31 @@ const {
 
 const RPC_URL = process.env.RPC_URL;
 const PRIK = process.env.KEY;
+const TOTAL_POINT = process.argv[2];
 
 const web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
 const SM_WRAP = new web3.eth.Contract(SM_ABI, SM_ADDRESS);
 const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
 
 /**
- * Chon smart contract muon su dung
+ * Chon smart contract muon su dung (NOT WORK)
  * 0. SM_WRAP     : weth mang mainnet
  * 1. TEST_SM_WRAP: weth mang testnet
  */
 const _chooseSM = 0;
 const SM_USE = _chooseSM === 0 ? SM_WRAP : SM_WRAP;
-const chainID = _chooseSM === 0 ? Mainnet : Testnet;
+const chainID = _chooseSM === 0 ? Mainnet : Testnet; // not using now, so always run in mainnet (BE CAREFULL)
 
 const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
 const MIN_BALANCE = 0.0004; // ETH units, the minimum balance to keep in the account
-const CEIL_GAS = 140000002n; // 0.14 gwei
-let runningIncreaseGas = 0;
+const CEIL_GAS = 200000002n; // 1 gwei = 1.000.000.000 wei
 
-const eth_price = 3150;
-
-console.log("o __________________ CONTRACT _________________");
-console.log("o", SM_USE.options.address);
-console.log("o __________________ ADDRESS  _________________");
+console.log("o __________________ WRAP  _________________");
 console.log("o", account.address);
+logMessage(`Address: ${account.address}`);
+console.log("o POINT: ", TOTAL_POINT);
 console.log("o ---------------------------------------------\n");
-
 
 async function main() {
   
@@ -64,7 +63,7 @@ async function main() {
     // Tinh so luong transaction {num_tnx} can gui de full diem
     let balance = await handleError(web3.eth.getBalance(account.address));
     balance = Number(web3.utils.fromWei(balance.toString(), 'ether'));
-    let num_tnx = Math.ceil(74000 / (1.5 * eth_price *  balance)) * 2;
+    let num_tnx = Math.ceil(TOTAL_POINT / (1.5 * ETH_PRICE *  balance)) * 2;
     console.log("\nStart auto wrap/unwrap", num_tnx, "times");
 
     let gasPrice = await poolingGas(CEIL_GAS);
@@ -90,7 +89,7 @@ async function main() {
       let resultTxn = { status: false, fee: 0n };
 
       try {
-        resultTxn = await DepositOrWithdraw(SM_USE, tnx_count, account, MIN_BALANCE, runningIncreaseGas);
+        resultTxn = await DepositOrWithdraw(SM_USE, tnx_count, account, MIN_BALANCE, CEIL_GAS);
       } catch (error) {
         console.error("Transaction failed or timed out:", error.message);
       }
@@ -130,12 +129,13 @@ async function main() {
       }
     }
     console.log("\nTotal transactions completed:", tnx_count);
+    logMessage(`\nTotal transactions completed: ${tnx_count}`);
     console.log("Total fee elapsed:", total_fee);
+    logMessage(`Total fee elapsed: ${total_fee}`, "\n");
   }
 }
 
 main();
-
 
 /**
  * Change colors reference of text
