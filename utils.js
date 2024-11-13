@@ -125,18 +125,26 @@ async function getEthPrice() {
  * 
  * Function to deposit funds to the wrapped token contract
  */
+
+
+/**
+ * Function to deposit funds to the wrapped token contract
+ * @param {Contract} SM_USE 
+ * @param {ether} amount the amount (in Ether) of ETH to deposit
+ * @param {account} account 
+ * @param {BigInt} MAX_GAS in wei
+ * @returns 
+ */
 async function deposit(SM_USE, amount, account, MAX_GAS) {
   try {
     // Prepare the transaction
     const amountInEther = web3.utils.fromWei(amount, 'ether');
-    // const gasPrice = (await web3.eth.getGasPrice()) * BigInt(100 + GAS_FEE_INCREASE_PERCENT) / BigInt(100);
     const estimatedGas = await SM_USE.methods.deposit(amountInEther).estimateGas();
     const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
     const txData = SM_USE.methods.deposit(amountInEther).encodeABI();
 
     const gas_price = await poolingGas(MAX_GAS);
-    // const gas_price = 180000002n;
     const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
     const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
 
@@ -251,12 +259,6 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
       if (receipt !== undefined) {
         fee = await getTransactionFee(receipt.transactionHash);
       }
-      // fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : 0n;
-      // if (fee === 0n) {
-      //   console.log("Receipt of transaction is undefined");
-      //   await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
-      //   fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
-      // }
       console.log("Fee:", roundNumber(fee, 18, 8));
       
       return { status, fee };

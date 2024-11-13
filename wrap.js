@@ -18,6 +18,7 @@ const readline = require('readline').createInterface({
 
 const { 
   ETH_PRICE,
+  CEIL_GAS,
   SM_ADDRESS, 
   SM_ABI, 
   TEST_SM_WETH, 
@@ -46,7 +47,6 @@ const chainID = _chooseSM === 0 ? Mainnet : Testnet; // not using now, so always
 const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
 const MIN_BALANCE = 0.0004; // ETH units, the minimum balance to keep in the account
-const CEIL_GAS = 200000002n; // 1 gwei = 1.000.000.000 wei
 
 console.log("o __________________ WRAP  _________________");
 console.log("o", account.address);
