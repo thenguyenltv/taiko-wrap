@@ -1,5 +1,4 @@
 module.exports = {
-  ETH_PRICE: 3230,
   CEIL_GAS: 200000002n, // 1 gwei = 1.000.000.000 wei
   LOG_FILE: "wrap_log.log",
   RPC_URL: "https://rpc.ankr.com/taiko/a4d0b9019e455492c401aa9499bb36139980e8772bb41b304c4cd2afd4443a42", 

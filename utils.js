@@ -3,23 +3,19 @@ const { Web3, types } = require('web3');
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
 
 const { 
-  LOG_FILE,
-  Mainnet,
-  Testnet
+  LOG_FILE
 } = require('./constant');
 
 const fs = require('fs');
 const path = require('path');
-
-// Define the log file path
-const logFilePath = path.join(__dirname, LOG_FILE);
 
 /**
  * Function to log messages to the file
  * @param {*} message 
  */
 function logMessage(message) {
-  const timestamp = new Date().toISOString(); // Add a timestamp
+  const logFilePath = path.join(__dirname, LOG_FILE); 
+  const timestamp = new Date().toLocaleTimeString(); // Add a timestamp
   const log = `[${timestamp}] ${message}\n`;
 
   // Append the log message to the file
@@ -38,7 +34,7 @@ function logMessage(message) {
  * @param {number} [to=5] - The number of decimal places to round to, default is 5.
  * @returns {number} The rounded amount in `ETH`.
  */
-function roundNumber(num, decimal = 18, to = 5) {
+function convertWeiToNumber(num, decimal = 18, to = 5) {
   return Math.round(Number(num) / (10 ** (decimal - to))) / 10 ** to;
 }
 
@@ -114,10 +110,27 @@ async function cancelTransaction(latestGasPrice, account) {
 /**
  * Get the price of ETH token
  */
-async function getEthPrice() {
-  const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
-  const data = await response.json();
-  return data.ethereum.usd;
+async function getPrice(ids) {
+  const vsCurrencies = 'usd';
+
+  const cgk_url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=${vsCurrencies}`;
+  const options = {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      'x-cg-demo-api-key': 'CG-YgDGEFnzBiwndpu5ccPSfKvT'
+    }
+  };
+
+  try {
+    const response = await fetch(cgk_url, options);
+    const data = await response.json();
+    const price = data[ids][vsCurrencies]; // Access the price directly
+    return price - 1; // Return the price as a number
+  } catch (error) {
+    console.error('Error fetching Ethereum price:', error);
+    return 0;
+  }
 }
 
 /**
@@ -135,14 +148,14 @@ async function getEthPrice() {
  * @param {BigInt} MAX_GAS in wei
  * @returns 
  */
-async function deposit(SM_USE, amount, account, MAX_GAS) {
+async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
   try {
     // Prepare the transaction
-    const amountInEther = web3.utils.fromWei(amount, 'ether');
-    const estimatedGas = await SM_USE.methods.deposit(amountInEther).estimateGas();
+    const amount_in_wei = web3.utils.toWei(amount_in_eth.toString(), 'ether');
+    const estimatedGas = await SM_USE.methods.deposit(amount_in_eth).estimateGas();
     const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
-    const txData = SM_USE.methods.deposit(amountInEther).encodeABI();
+    const txData = SM_USE.methods.deposit(amount_in_eth).encodeABI();
 
     const gas_price = await poolingGas(MAX_GAS);
     const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
@@ -153,20 +166,20 @@ async function deposit(SM_USE, amount, account, MAX_GAS) {
       nonce,
       from: account.address,
       to: SM_USE.options.address,
-      value: amount,
+      value: amount_in_wei, // in wei
       data: txData,
       maxPriorityFeePerGas: max_priority_fee_per_gas,
       maxFeePerGas: max_fee_per_gas,
       gasLimit: gas_limit,
       type: '0x2',
-      chainID: Mainnet
+      chainID: chainID
     };
 
     // double check the balance
     await new Promise((resolve) => setTimeout(resolve, 1000)); 
     const balance = await web3.eth.getBalance(account.address);
-    if (balance < amount) {
-      console.log("Insufficient balance to deposit:", amount);
+    if (balance < amount_in_wei) {
+      console.log("Insufficient balance to deposit:", amount_in_eth, "ETH");
       return;
     }
 
@@ -187,7 +200,7 @@ async function deposit(SM_USE, amount, account, MAX_GAS) {
  * 
  * Function to withdraw funds from the wrapped token contract
 */
-async function withdraw(SM_USE, amount, account, MAX_GAS) {
+async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
   try {
     // Prepare the transaction
     let newAmount = amount - (amount / BigInt(500));
@@ -213,7 +226,7 @@ async function withdraw(SM_USE, amount, account, MAX_GAS) {
       maxFeePerGas: max_fee_per_gas,
       gasLimit: gas_limit,
       type: '0x2',
-      chainID: Mainnet
+      chainID: chainID
     };
 
     // double check the balance
@@ -236,39 +249,53 @@ async function withdraw(SM_USE, amount, account, MAX_GAS) {
 }
 
 /**
- * loop deposit and withdraw
+ * Loop deposit and withdraw based on balance and gas constraints.
+ *
+ * @param {object} SM_USE - Smart contract instance to interact with for deposit/withdraw actions.
+ * @param {number} chainID - ID of the blockchain network to execute transactions on.
+ * @param {number} indexTnx - Index of the transaction for tracking purposes.
+ * @param {object} account - Account object or address used to perform transactions.
+ * @param {number} MIN_BALANCE - Minimum balance threshold (in ether) to trigger deposit or withdraw actions.
+ * @param {number} MAX_GAS - Maximum gas price for the transactions.
+ * 
+ * @returns {Array} Returns an array containing:
+ *    - {boolean} status - Indicates success (true) or failure (false) of the loop operations.
+ *    - {bigint} fee - Total gas fee incurred for the transactions.
+ *    - {number} amount - The amount of ETH involved in the transaction, represented as a number.
  */
-async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS) {
+async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE, MAX_GAS) {
   const min_eth = web3.utils.toWei(MIN_BALANCE.toString(), 'ether');
   let status = true;
   let fee = 0n;
-  let [receipt, pre_gas] = [[true, 0n], 0n];
+  let receipt, pre_gas, amount;
 
   try {
     const balance = await web3.eth.getBalance(account.address);
 
     if (balance > min_eth) {
 
-      const amount = balance - BigInt(min_eth / 2);
+      const amount_in_wei = balance - BigInt(min_eth / 2);
+      const amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
+
+      const number_amount = Number(amountInEther);
       
-      console.log(`\n${indexTnx + 1}. Deposit...`, roundNumber(amount), "ETH to WETH");
+      console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      [receipt, pre_gas] = await deposit(SM_USE, amount, account, MAX_GAS);      
+      [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account, MAX_GAS);      
       await new Promise((resolve) => setTimeout(resolve, 5000));
       
       if (receipt !== undefined) {
         fee = await getTransactionFee(receipt.transactionHash);
       }
-      console.log("Fee:", roundNumber(fee, 18, 8));
       
-      return { status, fee };
+      return [ status, fee, Number(amountInEther) ];
     } else {
 
       const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
       
-      console.log(`\n${indexTnx + 1}. Withdraw...`, roundNumber(balanceOf), "WETH to ETH");
+      console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(balanceOf), "WETH to ETH");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      [receipt, pre_gas] = await withdraw(SM_USE, balanceOf, account, MAX_GAS);
+      [receipt, pre_gas] = await withdraw(SM_USE, chainID, balanceOf, account, MAX_GAS);
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       if (receipt !== undefined) {
@@ -280,9 +307,8 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
       //   await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
       //   fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
       // }
-      console.log("Fee:", roundNumber(fee, 18, 8));
       
-      return { status, fee };
+      return [ status, fee, 0 ];
     }
   } catch (err) {
     console.log("Transaction failed:", err.message);
@@ -292,9 +318,12 @@ async function DepositOrWithdraw(SM_USE, indexTnx, account, MIN_BALANCE, MAX_GAS
       await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
       fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
     }
-    if (fee == 0n) status = false;
+    if (fee == 0n) {
+      status = false;
+      amount = 0;
+    }
 
-    return { status, fee };
+    return { status, fee, amount};
   }
 }
 
@@ -322,11 +351,11 @@ async function poolingGas(ceil_gas){
 module.exports = {
   handleError,
   cancelTransaction,
-  getEthPrice,
+  getPrice,
   deposit,
   withdraw,
   DepositOrWithdraw,
-  roundNumber,
+  convertWeiToNumber,
   getTransactionFee,
   poolingGas,
   logMessage
