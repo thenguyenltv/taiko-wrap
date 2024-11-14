@@ -18,24 +18,29 @@ const {
   Testnet
 } = require('./constant');
 
+
+
+/**
+ * Chon smart contract muon su dung (NOT WORK)
+ * 0. SM_WRAP     : weth mang MAINNET
+ * 1. TEST_SM_WRAP: weth mang TESTNET
+ */
+const IsMainnet = 1;
+
 const PRIK = process.env.KEY;
+let RPC_URL = IsMainnet === 1 ? process.env.RPC_URL : "https://rpc.hekla.taiko.xyz";
 const TOTAL_POINT = process.argv[2];
 
-const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
+const web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
 const SM_WRAP = new web3.eth.Contract(SM_ABI, SM_ADDRESS);
 const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
 const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
-/**
- * Chon smart contract muon su dung (NOT WORK)
- * 0. SM_WRAP     : weth mang mainnet
- * 1. TEST_SM_WRAP: weth mang testnet
- */
-const IsMainnet = 0;
+
 const SM_USE = IsMainnet === 1 ? SM_WRAP : TEST_SM_WRAP;
 const chainID = IsMainnet === 1 ? Mainnet : Testnet; // not using now, so always run in mainnet (BE CAREFULL)
 
-const MIN_BALANCE = 0.001; // ETH units, the minimum balance to keep in the account
+const MIN_BALANCE = 0.0004; // ETH units, the minimum balance to keep in the account
 
 console.log("o __________________ WRAP  _________________");
 console.log("o Run on", chainID);
