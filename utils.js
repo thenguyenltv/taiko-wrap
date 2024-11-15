@@ -179,7 +179,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
     await new Promise((resolve) => setTimeout(resolve, 1000)); 
     const balance = await web3.eth.getBalance(account.address);
     if (balance < amount_in_wei) {
-      console.log("Insufficient balance to deposit:", amount_in_eth, "ETH");
+      console.log("Insufficient balance to deposit:", convertWeiToNumber(balance), "ETH");
       return;
     }
 
@@ -277,8 +277,6 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
       const amount_in_wei = balance - BigInt(min_eth / 2);
       const amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
 
-      const number_amount = Number(amountInEther);
-      
       console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account, MAX_GAS);      
@@ -311,7 +309,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
       return [ status, fee, 0 ];
     }
   } catch (err) {
-    console.log("Transaction failed:", err.message);
+    // console.error("Deposit or Withdraw failed:", err.message);
 
     // Xu ly Transaction not found 
     if (err.message.includes("Transaction not found")) {
