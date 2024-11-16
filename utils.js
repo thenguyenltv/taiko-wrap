@@ -203,8 +203,8 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
 async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
   try {
     // Prepare the transaction
-    let newAmount = amount - (amount / BigInt(500));
-    const txData = SM_USE.methods.withdraw(newAmount).encodeABI();
+    // let newAmount = amount - (amount / BigInt(500));
+    const txData = SM_USE.methods.withdraw(amount).encodeABI();
     const estimatedGas = await web3.eth.estimateGas({
       from: account.address,
       to: SM_USE.options.address,
@@ -232,8 +232,8 @@ async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
     // double check the balance
     await new Promise((resolve) => setTimeout(resolve, 1000)); 
     const balance = await SM_USE.methods.balanceOf(account.address).call();
-    if (balance < newAmount) {
-      console.log("Insufficient balance to withdraw:", newAmount);
+    if (balance < amount) {
+      console.log("Insufficient balance to withdraw:", amount);
       return;
     }
     
@@ -274,7 +274,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
 
     if (balance > min_eth) {
 
-      const amount_in_wei = balance - BigInt(min_eth / 2);
+      const amount_in_wei = balance - (BigInt(min_eth) / 2n);
       const amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
 
       console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
@@ -290,10 +290,11 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
     } else {
 
       const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
-      
-      console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(balanceOf), "WETH to ETH");
+      let newAmount = balanceOf - (balanceOf / BigInt(500));
+
+      console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(newAmount), "WETH to ETH");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      [receipt, pre_gas] = await withdraw(SM_USE, chainID, balanceOf, account, MAX_GAS);
+      [receipt, pre_gas] = await withdraw(SM_USE, chainID, newAmount, account, MAX_GAS);
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       if (receipt !== undefined) {

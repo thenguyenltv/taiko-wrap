@@ -42,7 +42,7 @@ const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 const SM_USE = IsMainnet === 1 ? SM_WRAP : TEST_SM_WRAP;
 const chainID = IsMainnet === 1 ? Mainnet : Testnet; // not using now, so always run in mainnet (BE CAREFULL)
 
-const MIN_BALANCE = 0.0004; // ETH units, the minimum balance to keep in the account
+const MIN_BALANCE = 0.0006; // ETH units, the minimum balance to keep in the account
 
 console.log("o __________________ WRAP  _________________");
 console.log("o Run on", chainID);
@@ -115,7 +115,7 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
         console.log("Continue to next transaction...");
-        await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 15));
+        await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 12));
         continue;
       }
       // Các dòng mã phía dưới sẽ không được thực hiện nếu điều kiện if ở trên đúng
