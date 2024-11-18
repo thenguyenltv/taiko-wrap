@@ -2,7 +2,7 @@ const { Web3, types } = require('web3');
 
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
 
-const { 
+const {
   LOG_FILE
 } = require('./constant');
 
@@ -14,7 +14,7 @@ const path = require('path');
  * @param {*} message 
  */
 function logMessage(message) {
-  const logFilePath = path.join(__dirname, LOG_FILE); 
+  const logFilePath = path.join(__dirname, LOG_FILE);
   const timestamp = new Date().toLocaleTimeString(); // Add a timestamp
   const log = `[${timestamp}] ${message}\n`;
 
@@ -40,11 +40,11 @@ function convertWeiToNumber(num, decimal = 18, to = 5) {
 
 async function handleError(promise) {
   try {
-      return await promise;
+    return await promise;
   } catch (error) {
-      console.error("Error:", error);
-      // Handle the error appropriately here
-      return null; // or throw error if you want to propagate it
+    console.error("Error:", error);
+    // Handle the error appropriately here
+    return null; // or throw error if you want to propagate it
   }
 }
 
@@ -60,16 +60,16 @@ async function getTransactionFee(txHash) {
   const tx = await web3.eth.getTransaction(txHash);
 
   if (txReceipt && tx) {
-      const gasUsed = BigInt(txReceipt.gasUsed);
-      const gasPrice = BigInt(tx.gasPrice);
+    const gasUsed = BigInt(txReceipt.gasUsed);
+    const gasPrice = BigInt(tx.gasPrice);
 
-      const fee = gasUsed * gasPrice;
-      // const feeInEther = web3.utils.fromWei(fee.toString(), 'ether');s
+    const fee = gasUsed * gasPrice;
+    // const feeInEther = web3.utils.fromWei(fee.toString(), 'ether');s
 
-      return fee.toString();
+    return fee.toString();
   } else {
-      console.log('Transaction not found');
-      return '0';
+    console.log('Transaction not found');
+    return '0';
   }
 }
 
@@ -83,10 +83,10 @@ async function cancelTransaction(latestGasPrice, account) {
     // upgrade 10% gas fee
     const gasPrice = latestGasPrice * BigInt(110) / BigInt(100);
     console.log("Canceling transaction with gas price:", gasPrice);
-  
+
     // get the latest nonce
     let nonce = await web3.eth.getTransactionCount(account.address, 'pending');
-  
+
     // create a new transaction with the same nonce to send to yourself (type 0)
     const tx = {
       from: account.address,
@@ -97,7 +97,7 @@ async function cancelTransaction(latestGasPrice, account) {
       gasPrice,
       nonce
     };
-  
+
     // sign and send the transaction
     const signedTx = await account.signTransaction(tx);
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
@@ -157,9 +157,9 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
     const txData = SM_USE.methods.deposit(amount_in_eth).encodeABI();
 
-    const gas_price = await poolingGas(MAX_GAS);
+    const gas_price = await getLowGasPrice();
     const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
-    const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
+    const max_fee_per_gas = web3.utils.toWei('0.20', 'gwei');
 
     /** Transaction type 2 */
     const tx_params = {
@@ -176,7 +176,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
     };
 
     // double check the balance
-    await new Promise((resolve) => setTimeout(resolve, 1000)); 
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     const balance = await web3.eth.getBalance(account.address);
     if (balance < amount_in_wei) {
       console.log("Insufficient balance to deposit:", convertWeiToNumber(balance), "ETH");
@@ -185,7 +185,16 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
 
     // Sign and send the transaction
     const signedTx = await account.signTransaction(tx_params);
-    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    // const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    // Create a promise for sending the transaction
+    const transactionPromise = web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    // Limit the receipt time to 5 minutes (300,000 milliseconds)
+    const receipt = await Promise.race([
+      transactionPromise,
+      timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
+    ]);
 
     const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas);
 
@@ -212,9 +221,9 @@ async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
     });
     const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
     const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
-    const gas_price = await poolingGas(MAX_GAS);
+    const gas_price = await getLowGasPrice();
     const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
-    const max_fee_per_gas = web3.utils.toWei('0.25', 'gwei');
+    const max_fee_per_gas = web3.utils.toWei('0.20', 'gwei');
 
     /** Transaction type 2 */
     const tx_params = {
@@ -230,16 +239,25 @@ async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
     };
 
     // double check the balance
-    await new Promise((resolve) => setTimeout(resolve, 1000)); 
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     const balance = await SM_USE.methods.balanceOf(account.address).call();
     if (balance < amount) {
       console.log("Insufficient balance to withdraw:", amount);
       return;
     }
-    
+
     // Send the transaction
     const signedTx = await account.signTransaction(tx_params);
-    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+    // const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    // Create a promise for sending the transaction
+    const transactionPromise = web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+    // Limit the receipt time to 5 minutes (300,000 milliseconds)
+    const receipt = await Promise.race([
+      transactionPromise,
+      timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
+    ]);
 
     const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas); // a BigInt in wei
     return [receipt, pre_gas];
@@ -279,14 +297,14 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
 
       console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account, MAX_GAS);      
+      [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account, MAX_GAS);
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      
+
       if (receipt !== undefined) {
         fee = await getTransactionFee(receipt.transactionHash);
       }
-      
-      return [ status, fee, Number(amountInEther) ];
+
+      return [status, fee, Number(amountInEther)];
     } else {
 
       const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
@@ -306,8 +324,8 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
       //   await new Promise((resolve) => setTimeout(resolve, 30000)); // wait to rpc node update
       //   fee = receipt !== undefined ? await getTransactionFee(receipt.transactionHash) : pre_gas;
       // }
-      
-      return [ status, fee, 0 ];
+
+      return [status, fee, 0];
     }
   } catch (err) {
     // console.error("Deposit or Withdraw failed:", err.message);
@@ -322,7 +340,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
       amount = 0;
     }
 
-    return { status, fee, amount};
+    return { status, fee, amount };
   }
 }
 
@@ -330,7 +348,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
  * 
  * @param {BigInt} ceil_gas - The ceil of gas in wei
  */
-async function poolingGas(ceil_gas){
+async function poolingGas(ceil_gas) {
   let gas_price = 0n;
   let time_count = 0;
   while (true) {
@@ -340,10 +358,64 @@ async function poolingGas(ceil_gas){
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
     time_count++;
-    
-    if(time_count % 60 == 0){
+
+    if (time_count % 60 == 0) {
       console.log(".......Wait next 60s to lower GAS.")
     }
+  }
+}
+
+/**
+ * Helper function for timeout
+ */
+function timeoutPromise(ms) {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("Transaction timeout: receipt not received within 5 minutes")), ms)
+  );
+}
+
+/**
+ * Fetches the gas price every specified interval for a total duration and returns 
+ * the adjusted lowest gas price based on observed prices during the polling period.
+ * 
+ * @param {*} pollingInterval - Interval in milliseconds between each gas price fetch (default: 1000ms or 1 second).
+ * @param {*} maxDuration - Total duration in milliseconds for polling gas prices (default: 10000ms or 10 seconds).
+ * @returns {Promise<BigInt>} - The adjusted lowest gas price after polling.
+ */
+async function getLowGasPrice(pollingInterval = 1000, maxDuration = 10000) {
+  try {
+    let lowestGasPrice = await handleError(web3.eth.getGasPrice());
+    let secondLowestGasPrice = lowestGasPrice;
+    console.log(`Initial gas price: ${lowestGasPrice}`);
+
+    const maxAttempts = Math.floor(maxDuration / pollingInterval);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, pollingInterval)); // Wait for the polling interval
+
+      const currentGasPrice = await handleError(web3.eth.getGasPrice());
+      console.log(`Attempt ${attempt}: Current gas price = ${currentGasPrice}`);
+
+      if (BigInt(currentGasPrice) < BigInt(lowestGasPrice)) {
+        secondLowestGasPrice = lowestGasPrice; // Update second lowest
+        lowestGasPrice = currentGasPrice; // Update lowest
+      } else if (
+        BigInt(currentGasPrice) > BigInt(lowestGasPrice) &&
+        BigInt(currentGasPrice) < BigInt(secondLowestGasPrice)
+      ) {
+        secondLowestGasPrice = currentGasPrice; // Update second lowest
+      }
+    }
+
+    // Adjust the lowest gas price based on the formula
+    lowestGasPrice = BigInt(lowestGasPrice) +
+      (BigInt(secondLowestGasPrice) - BigInt(lowestGasPrice)) / BigInt(2);
+    console.log(`Final adjusted lowest gas price: ${lowestGasPrice}`);  
+
+    return lowestGasPrice;
+  } catch (error) {
+    console.error("An error occurred while fetching gas prices:", error.message);
+    throw error;
   }
 }
 
