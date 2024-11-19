@@ -95,6 +95,7 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
 
     }
 
+    /* Print the time consumed */
     let end = new Date().getTime();
     let time = (end - start) / 1000;
     console.log("--> Time elapsed:",
@@ -110,26 +111,31 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
     }
     else {
       /** Xu ly lenh fail --> goi ham cancelTransaction */
-      await new Promise((resolve) => setTimeout(resolve, delayFailedTime));
+      await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 3));
       // check nonce if the transaction is still mine in delayFailedTime and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
         console.log("Continue to next transaction...");
-        await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 12));
+
+        // Cong 1 cho tnx_count
+        tnx_count++;
+        current_point += Math.floor(1.5 * eth_price * amount);
+        total_fee += convertWeiToNumber(fee, 18, 8);
+        console.log("(Maybe wrong) Fee:", convertWeiToNumber(fee, 18, 8), "- ETH:", eth_price, "- Current Point:", current_point);
+
+        await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 3));
         continue;
       }
-      // Các dòng mã phía dưới sẽ không được thực hiện nếu điều kiện if ở trên đúng
-      const latestGasPrice = await handleError(web3.eth.getGasPrice());
-      console.log("Transaction failed, Start canceling transaction...");
-      const receipt = await handleError(cancelTransaction(latestGasPrice, account));
-      if (receipt) {
-        console.log("Cancel transaction successfully");
-      }
+      // // Các dòng mã phía dưới sẽ không được thực hiện nếu điều kiện if ở trên đúng
+      // const latestGasPrice = await handleError(web3.eth.getGasPrice());
+      // console.log("Transaction failed, Start canceling transaction...");
+      // const receipt = await handleError(cancelTransaction(latestGasPrice, account));
+      // if (receipt) {
+      //   console.log("Cancel transaction successfully");
+      // }
     }
   }
 }
-
-
 
 async function main() {
 
