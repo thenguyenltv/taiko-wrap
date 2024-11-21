@@ -37,8 +37,8 @@ const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
 const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
 const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
-const SM_USE = IsTestnet === 1 ? SM_WRAP : TEST_SM_WRAP;
-const chainID = IsTestnet === 1 ? Mainnet : Testnet; 
+const SM_USE = IsTestnet === true ? TEST_SM_WRAP : SM_WRAP;
+const chainID = IsTestnet === true ? Testnet : Mainnet; 
 
 console.log("o __________________ WRAP  _________________");
 console.log("o Run on", chainID);
