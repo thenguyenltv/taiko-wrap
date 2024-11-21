@@ -11,11 +11,12 @@ const {
 
 const {
   cancelTransaction,
+  getLowGasPrice,
   DepositOrWithdraw,
 } = require('./methods');
 
 const {
-  CEIL_GAS,
+  MIN_BALANCE,
   SM_ADDRESS,
   SM_ABI,
   TEST_SM_WETH,
@@ -25,28 +26,19 @@ const {
 } = require('./constant');
 
 
-
-/**
- * Chon smart contract muon su dung (NOT WORK)
- * 0. SM_WRAP     : weth mang MAINNET
- * 1. TEST_SM_WRAP: weth mang TESTNET
- */
-const IsMainnet = 1;
-
 const PRIK = process.env.KEY;
-let RPC_URL = IsMainnet === 1 ? process.env.RPC_URL : "https://rpc.hekla.taiko.xyz";
+let RPC_URL = process.env.RPC_URL;
 const TOTAL_POINT = process.argv[2];
 
 const web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
+
 const SM_WRAP = new web3.eth.Contract(SM_ABI, SM_ADDRESS);
 const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
 const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
-
-const SM_USE = IsMainnet === 1 ? SM_WRAP : TEST_SM_WRAP;
-const chainID = IsMainnet === 1 ? Mainnet : Testnet; // not using now, so always run in mainnet (BE CAREFULL)
-
-const MIN_BALANCE = 0.0006; // ETH units, the minimum balance to keep in the account
+const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
+const SM_USE = IsTestnet === 1 ? SM_WRAP : TEST_SM_WRAP;
+const chainID = IsTestnet === 1 ? Mainnet : Testnet; 
 
 console.log("o __________________ WRAP  _________________");
 console.log("o Run on", chainID);
@@ -63,15 +55,19 @@ const rl = readline.createInterface({
   output: process.stdout
 });
 
-
-
-async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_POINT) {
+async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
   const StartNonce = await handleError(web3.eth.getTransactionCount(account.address));
+  // console.log("[wrap.js] StartNonce", StartNonce);
   let current_point = 0, total_fee = 0;
   let tnx_count = 0;
   let delayFailedTime = 10000; // unit (ms), 1000ms = 1s
   let start = new Date().getTime();
   let eth_price = 0;
+
+  // Test the gas
+  const test_gas = await getLowGasPrice(1000, 5000)
+  console.log("Gas Price Now:", test_gas);
+  await new Promise((resolve) => setTimeout(resolve, 5000));
 
   while (true) {
     /** Stop Condition */
@@ -90,7 +86,7 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
     /* Try sending transaction */
     let status = false, fee = 0n, amount = 0;
     try {
-      [status, fee, amount] = await DepositOrWithdraw(SM_USE, chainID, tnx_count, account, MIN_BALANCE, CEIL_GAS);
+      [status, fee, amount] = await DepositOrWithdraw(SM_USE, chainID, tnx_count, account);
       eth_price = await getPrice('ethereum');
 
     } catch (error) {
@@ -148,7 +144,7 @@ async function main() {
   const autoRun = async () => {
     console.log("\nKhông nhận được phản hồi. Tự động chạy tool...");
     rl.close();
-    await startTransactions(SM_USE, chainID, account, MIN_BALANCE, Number(TOTAL_POINT));
+    await startTransactions(SM_USE, chainID, account, Number(TOTAL_POINT));
   };
 
   // Đặt timeout
@@ -160,7 +156,7 @@ async function main() {
     const userInput = answer.trim().toLowerCase();
     if (userInput === "y" || userInput === "") {
       console.log("Chạy tool...");
-      await startTransactions(SM_USE, chainID, account, MIN_BALANCE, Number(TOTAL_POINT));
+      await startTransactions(SM_USE, chainID, account, Number(TOTAL_POINT));
     } else {
       console.log("Hủy bỏ bởi người dùng.");
     }

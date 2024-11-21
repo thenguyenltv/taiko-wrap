@@ -1,6 +1,17 @@
 const { Web3, types } = require('web3');
+
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.RPC_URL));
 
+const {
+    handleError,
+    convertWeiToNumber,
+    timeoutPromise
+} = require('./utils');
+
+const {
+    CEIL_GAS,
+    MIN_BALANCE
+} = require('./constant');
 
 /**
  * Retrieves and calculates the transaction fee for a given transaction hash.
@@ -68,7 +79,7 @@ async function cancelTransaction(latestGasPrice, account) {
  * @param {*} receipt - (Must define) The transaction receipt to check finality for 
  * @returns {BigInt} - The transaction fee if the transaction is final, or 0n if it times out.
  */
-async function checkFinality(receipt, fee) {
+async function checkFinality(receipt) {
 
     // Check receipt define
     if (!receipt || typeof receipt !== 'object' || !receipt.blockNumber || !receipt.transactionHash) {
@@ -78,9 +89,10 @@ async function checkFinality(receipt, fee) {
     const startTime = Date.now();
     while (true) {
         const currentBlock = await web3.eth.getBlockNumber();
-        if (currentBlock > receipt.blockNumber) {
+        if (currentBlock >= receipt.blockNumber) {
             fee = await getTransactionFee(receipt.transactionHash);
-            break;
+            // console.log("[checkFinality] Fee", fee);
+            return fee;
         }
         else {
             // Wait for 5 seconds before checking again
@@ -90,7 +102,7 @@ async function checkFinality(receipt, fee) {
         // Not running over 2 mins
         if (Date.now() - startTime > 120000) {
             console.error('Timeout exceeded while waiting for transaction finality.');
-            break;
+            return 0n;
         }
     }
 }
@@ -120,8 +132,8 @@ async function poolingGas(ceil_gas) {
  * Fetches the gas price every specified interval for a total duration and returns 
  * the adjusted lowest gas price based on observed prices during the polling period.
  * 
- * @param {*} pollingInterval - Interval in milliseconds between each gas price fetch (default: 1000ms or 1 second).
- * @param {*} maxDuration - Total duration in milliseconds for polling gas prices (default: 10000ms or 10 seconds).
+ * @param {*} pollingInterval - Interval in milliseconds between each gas price fetch (default: 700ms or 0.7 second).
+ * @param {*} maxDuration - Total duration in milliseconds for polling gas prices (default: 5000ms or 5 seconds).
  * @returns {Promise<BigInt>} - The adjusted lowest gas price after polling.
  */
 async function getLowGasPrice(pollingInterval = 700, maxDuration = 5000) {
@@ -150,7 +162,7 @@ async function getLowGasPrice(pollingInterval = 700, maxDuration = 5000) {
         // Adjust the lowest gas price based on the formula
         lowestGasPrice = BigInt(lowestGasPrice) +
             (BigInt(secondLowestGasPrice) - BigInt(lowestGasPrice)) / BigInt(2);
-        console.log(`Final adjusted lowest gas price: ${lowestGasPrice}`);
+        console.log(`Final adjusted gas price: ${convertWeiToNumber(lowestGasPrice, 9, 3)} gwei`);
 
         return lowestGasPrice;
     } catch (error) {
@@ -164,10 +176,9 @@ async function getLowGasPrice(pollingInterval = 700, maxDuration = 5000) {
  * @param {Contract} SM_USE 
  * @param {ether} amount the amount (in Ether) of ETH to deposit
  * @param {account} account 
- * @param {BigInt} MAX_GAS in wei
  * @returns 
  */
-async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
+async function deposit(SM_USE, chainID, amount_in_eth, account) {
     try {
         // Prepare the transaction
         const amount_in_wei = web3.utils.toWei(amount_in_eth.toString(), 'ether');
@@ -178,7 +189,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
 
         const gas_price = await getLowGasPrice();
         const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
-        const max_fee_per_gas = MAX_GAS;
+        const max_fee_per_gas = CEIL_GAS;
 
         // Predict the gas fee
         const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas); // a BigInt in wei
@@ -214,8 +225,8 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
 
         // Limit the receipt time to 5 minutes (300,000 milliseconds)
         const receipt = await Promise.race([
-          transactionPromise,
-          timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
+            transactionPromise,
+            timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
         ]);
 
 
@@ -230,7 +241,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, MAX_GAS) {
  * 
  * Function to withdraw funds from the wrapped token contract
 */
-async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
+async function withdraw(SM_USE, chainID, amount, account) {
     try {
         // Prepare the transaction
         // let newAmount = amount - (amount / BigInt(500));
@@ -244,7 +255,7 @@ async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
         const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
         const gas_price = await getLowGasPrice();
         const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
-        const max_fee_per_gas = MAX_GAS;
+        const max_fee_per_gas = CEIL_GAS;
 
         // Predict the gas fee
         const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas); // a BigInt in wei
@@ -279,8 +290,8 @@ async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
 
         // Limit the receipt time to 5 minutes (300,000 milliseconds)
         const receipt = await Promise.race([
-          transactionPromise,
-          timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
+            transactionPromise,
+            timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
         ]);
 
         return [receipt, pre_gas];
@@ -296,15 +307,14 @@ async function withdraw(SM_USE, chainID, amount, account, MAX_GAS) {
  * @param {number} chainID - ID of the blockchain network to execute transactions on.
  * @param {number} indexTnx - Index of the transaction for tracking purposes.
  * @param {object} account - Account object or address used to perform transactions.
- * @param {number} MIN_BALANCE - Minimum balance threshold (in ether) to trigger deposit or withdraw actions.
- * @param {number} MAX_GAS - Maximum gas price for the transactions.
+ * @param {number} CEIL_GAS - Maximum gas price for the transactions.
  * 
  * @returns {Array} Returns an array containing:
  *    - {boolean} status - Indicates success (true) or failure (false) of the loop operations.
  *    - {bigint} fee - Total gas fee incurred for the transactions.
  *    - {number} amount - The amount of ETH involved in the transaction, represented as a number.
  */
-async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE, MAX_GAS) {
+async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
     const min_eth = web3.utils.toWei(MIN_BALANCE.toString(), 'ether');
     let status = true;
     let fee = 0n;
@@ -315,14 +325,21 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
 
         if (balance > min_eth) {
 
-            const amount_in_wei = balance - (BigInt(min_eth) / 2n);
-            const amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
+            let amount_in_wei = balance - (BigInt(min_eth) / 2n);
+
+            if (chainID == 167009) {
+                // amount_in_wei = amount_in_wei / 25n;
+                console.log("\nAdjust amount in TESTNET...", convertWeiToNumber(amount_in_wei));
+                await new Promise((resolve) => setTimeout(resolve, 10000));
+            }
+
+            let amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
 
             console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
-            [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account, MAX_GAS);
+            [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account);
 
             amount = Number(amountInEther);
-            await checkFinality(receipt, fee);
+            fee = await checkFinality(receipt);
 
             return [status, fee, amount];
         } else {
@@ -330,10 +347,16 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
             const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let newAmount = balanceOf - (balanceOf / BigInt(500));
 
+            if (chainID == 167009) {
+                // newAmount = newAmount / 25n;
+                console.log("\nAdjust amount in TESTNET...", convertWeiToNumber(newAmount));
+                await new Promise((resolve) => setTimeout(resolve, 10000));
+            }
+
             console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(newAmount), "WETH to ETH");
-            [receipt, pre_gas] = await withdraw(SM_USE, chainID, newAmount, account, MAX_GAS);
-            
-            await checkFinality(receipt, fee);
+            [receipt, pre_gas] = await withdraw(SM_USE, chainID, newAmount, account);
+
+            fee = await checkFinality(receipt);
 
             return [status, fee, 0];
         }
@@ -341,7 +364,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, MIN_BALANCE
         console.error("Failed Finality transaction:", err.message);
 
         // receipt undefined, dm await roi van return undefined, rpc dom?
-        if (err.message.includes("Invalid receipt object provided")) { 
+        if (err.message.includes("Invalid receipt object provided")) {
             fee = pre_gas;
         }
 
@@ -361,4 +384,5 @@ module.exports = {
     DepositOrWithdraw,
     getTransactionFee,
     poolingGas,
+    getLowGasPrice
 };

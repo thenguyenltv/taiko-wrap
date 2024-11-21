@@ -97,6 +97,7 @@ module.exports = {
   handleError,
   getPrice,
   convertWeiToNumber,
+  timeoutPromise,
   logMessage,
   logElapsedTime
 };
