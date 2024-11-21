@@ -13,30 +13,6 @@ const {
     MIN_BALANCE
 } = require('./constant');
 
-/**
- * Retrieves and calculates the transaction fee for a given transaction hash.
- * 
- * @param {string} txHash - The hash of the transaction to retrieve the fee for.
- * @returns {Promise<void>} - A promise that resolves when the transaction fee is calculated and logged.
- * 
- */
-async function getTransactionFee(txHash) {
-    const txReceipt = await web3.eth.getTransactionReceipt(txHash);
-    const tx = await web3.eth.getTransaction(txHash);
-
-    if (txReceipt && tx) {
-        const gasUsed = BigInt(txReceipt.gasUsed);
-        const gasPrice = BigInt(tx.gasPrice);
-
-        const fee = gasUsed * gasPrice;
-        // const feeInEther = web3.utils.fromWei(fee.toString(), 'ether');s
-
-        return fee.toString();
-    } else {
-        console.log('Get fee: Transaction not found');
-        return '0';
-    }
-}
 
 /**
  * Cancel transaction function
@@ -73,6 +49,31 @@ async function cancelTransaction(latestGasPrice, account) {
 }
 
 /**
+ * Retrieves and calculates the transaction fee for a given transaction hash.
+ * 
+ * @param {string} txHash - The hash of the transaction to retrieve the fee for.
+ * @returns {Promise<void>} - A promise that resolves when the transaction fee is calculated and logged.
+ * 
+ */
+async function getTransactionFee(txHash) {
+    try {
+        const txReceipt = await web3.eth.getTransactionReceipt(txHash);
+        const tx = await web3.eth.getTransaction(txHash);
+
+        const gasUsed = BigInt(txReceipt.gasUsed);
+        const gasPrice = BigInt(tx.gasPrice);
+
+        const fee = gasUsed * gasPrice;
+        // const feeInEther = web3.utils.fromWei(fee.toString(), 'ether');s
+
+        return fee.toString();
+    } catch (error) {
+        console.error('Get fee:', error.message);
+        return '0';
+    }
+}
+
+/**
  * Check the finality of a transaction and retrieve the transaction fee.
  * The process will not exceed 2 minutes.
  * 
@@ -84,6 +85,7 @@ async function checkFinality(receipt) {
     // Check receipt define
     if (!receipt || typeof receipt !== 'object' || !receipt.blockNumber || !receipt.transactionHash) {
         console.error('Invalid receipt object provided.');
+        return 0n;
     }
 
     const startTime = Date.now();
@@ -229,7 +231,6 @@ async function deposit(SM_USE, chainID, amount_in_eth, account) {
             timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
         ]);
 
-
         return [receipt, pre_gas];
     } catch (error) {
         console.error("An error occurred while depositing:", error.message);
@@ -318,7 +319,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
     const min_eth = web3.utils.toWei(MIN_BALANCE.toString(), 'ether');
     let status = true;
     let fee = 0n;
-    let receipt, pre_gas, amount;
+    let receipt, pre_gas, amount = 0;
 
     try {
         const balance = await web3.eth.getBalance(account.address);
@@ -326,6 +327,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
         if (balance > min_eth) {
 
             let amount_in_wei = balance - (BigInt(min_eth) / 2n);
+            amount = Number(amountInEther);
 
             if (chainID == 167009) {
                 // amount_in_wei = amount_in_wei / 25n;
@@ -338,7 +340,6 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
             console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
             [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account);
 
-            amount = Number(amountInEther);
             fee = await checkFinality(receipt);
 
             return [status, fee, amount];
@@ -364,8 +365,10 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
         console.error("Failed Finality transaction:", err.message);
 
         // receipt undefined, dm await roi van return undefined, rpc dom?
-        if (err.message.includes("Invalid receipt object provided")) {
+        if (err.message.includes("Invalid receipt object provided") 
+            || err.message.includes("Transaction not found")) {
             fee = pre_gas;
+            amount = amount === 0 ? 0.2 : amount;
         }
 
         if (fee == 0n) {
@@ -373,7 +376,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
             fee = pre_gas;
         }
 
-        return { status, fee, amount };
+        return [ status, fee, amount ];
     }
 }
 
