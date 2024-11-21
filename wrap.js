@@ -6,9 +6,13 @@ const {
   logMessage,
   convertWeiToNumber,
   getPrice,
+  logElapsedTime
+} = require('./utils');
+
+const {
   cancelTransaction,
   DepositOrWithdraw,
-} = require('./utils');
+} = require('./methods');
 
 const {
   CEIL_GAS,
@@ -72,8 +76,9 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
   while (true) {
     /** Stop Condition */
     if (current_point > TOTAL_POINT) {
-      const balance = await handleError(web3.eth.getBalance(account.address));
-      const balance_in_eth = convertWeiToNumber(balance, 18, 5);
+      // const balance = await handleError(web3.eth.getBalance(account.address));
+      // const balance_in_eth = convertWeiToNumber(balance, 18, 5);
+      const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
 
       if (balance_in_eth > MIN_BALANCE) {
         console.log(`\n==> ${account.address} - ${Number(total_fee.toPrecision(3))} ETH - ${current_point} Points\n`);
@@ -89,43 +94,38 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
       eth_price = await getPrice('ethereum');
 
     } catch (error) {
-      // console.error("Transaction failed or timed out:", error.message);
       eth_price = 3000; // Fallback price if fetching fails
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
-
-    /* Print the time consumed */
-    let end = new Date().getTime();
-    let time = (end - start) / 1000;
-    console.log("--> Time elapsed:",
-      Math.floor(time / 3600), "hour",
-      Math.floor(time % 3600 / 60), "minutes",
-      Math.round(time % 60 * 100) / 100, "seconds");
 
     if (status) {
       tnx_count++;
       current_point += Math.floor(1.5 * eth_price * amount);
       total_fee += convertWeiToNumber(fee, 18, 8);
       console.log("Fee:", convertWeiToNumber(fee, 18, 8), "- ETH:", eth_price, "- Current Point:", current_point);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
     }
     else {
       /** Xu ly lenh fail --> goi ham cancelTransaction */
-      await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 3));
+      await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 4));
       // check nonce if the transaction is still mine in delayFailedTime and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
         console.log("Continue to next transaction...");
 
         // Cong 1 cho tnx_count
-        tnx_count++;
-        current_point += Math.floor(1.5 * eth_price * amount);
-        total_fee += convertWeiToNumber(fee, 18, 8);
-        console.log("(Maybe wrong) Fee:", convertWeiToNumber(fee, 18, 8), "- ETH:", eth_price, "- Current Point:", current_point);
-
-        await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 3));
-        continue;
+        try {
+          tnx_count++;
+          current_point += Math.floor(1.5 * eth_price * amount);
+          total_fee += convertWeiToNumber(fee, 18, 8);
+          console.log("(Maybe wrong) Fee:", convertWeiToNumber(fee, 18, 8), "- ETH:", eth_price, "- Current Point:", current_point);
+        } catch (error) {
+          console.error("Fee or point may not increase");
+        }
+        await new Promise((resolve) => setTimeout(resolve, delayFailedTime));
       }
+
+      /** Send `Cancel Transaction`  */
       // // Các dòng mã phía dưới sẽ không được thực hiện nếu điều kiện if ở trên đúng
       // const latestGasPrice = await handleError(web3.eth.getGasPrice());
       // console.log("Transaction failed, Start canceling transaction...");
@@ -134,6 +134,9 @@ async function startTransactions(SM_USE, chainID, account, MIN_BALANCE, TOTAL_PO
       //   console.log("Cancel transaction successfully");
       // }
     }
+
+    /* Print the time consumed */
+    logElapsedTime(start);
   }
 }
 
@@ -154,7 +157,8 @@ async function main() {
   // Chờ xác nhận từ người dùng
   rl.question("Bạn có muốn chạy tool không? (Nhấn Y/y để chạy, bỏ qua sau 1 phút sẽ tự động chạy): ", async (answer) => {
     clearTimeout(timer); // Dừng timer nếu nhận được đầu vào từ người dùng
-    if (answer.trim().toLowerCase() === "y") {
+    const userInput = answer.trim().toLowerCase();
+    if (userInput === "y" || userInput === "") {
       console.log("Chạy tool...");
       await startTransactions(SM_USE, chainID, account, MIN_BALANCE, Number(TOTAL_POINT));
     } else {
