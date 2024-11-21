@@ -327,15 +327,15 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
         if (balance > min_eth) {
 
             let amount_in_wei = balance - (BigInt(min_eth) / 2n);
-            amount = Number(amountInEther);
-
+            
             if (chainID == 167009) {
                 // amount_in_wei = amount_in_wei / 25n;
                 console.log("\nAdjust amount in TESTNET...", convertWeiToNumber(amount_in_wei));
                 await new Promise((resolve) => setTimeout(resolve, 10000));
             }
-
+            
             let amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
+            amount = Number(amountInEther);
 
             console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
             [receipt, pre_gas] = await deposit(SM_USE, chainID, amountInEther, account);
