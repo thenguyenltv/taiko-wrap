@@ -38,7 +38,7 @@ const account = web3.eth.accounts.privateKeyToAccount(PRIK);
 
 const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
 const SM_USE = IsTestnet === true ? TEST_SM_WRAP : SM_WRAP;
-const chainID = IsTestnet === true ? Testnet : Mainnet; 
+const chainID = IsTestnet === true ? Testnet : Mainnet;
 
 console.log("o __________________ WRAP  _________________");
 console.log("o Run on", chainID);
@@ -60,20 +60,18 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
   // console.log("[wrap.js] StartNonce", StartNonce);
   let current_point = 0, total_fee = 0;
   let tnx_count = 0;
-  let delayFailedTime = 10000; // unit (ms), 1000ms = 1s
+  let wait_10s = 10000; // unit (ms), 1000ms = 1s
   let start = new Date().getTime();
   let eth_price = 0;
 
   // Test the gas
-  const test_gas = await getLowGasPrice(1000, 5000)
-  console.log("Gas Price Now:", test_gas);
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  const test_gas = await getLowGasPrice(1000, wait_10s/2)
+  logMessage(".o0 ------------------------------- 0o.");
+  await new Promise((resolve) => setTimeout(resolve, wait_10s/2));
 
   while (true) {
     /** Stop Condition */
     if (current_point > TOTAL_POINT) {
-      // const balance = await handleError(web3.eth.getBalance(account.address));
-      // const balance_in_eth = convertWeiToNumber(balance, 18, 5);
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
 
       if (balance_in_eth > MIN_BALANCE) {
@@ -87,11 +85,31 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
     let status = false, fee = 0n, amount = 0;
     try {
       [status, fee, amount] = await DepositOrWithdraw(SM_USE, chainID, tnx_count, account);
+
+      // check fee is number
+      fee = fee === null ? 0n : fee;
+
+      // check amount is positive number
+      amount = amount === null ? 0 : amount;
+      amount = amount < 0 ? 0 : amount;
+
+      // // Create a timeout Promise
+      // // const timeoutPromise = timeoutPromise(5 * 60 * 1000); // 5 minutes in milliseconds
+      // const methodPromise = DepositOrWithdraw(SM_USE, chainID, tnx_count, account);
+      // console.log("methodPromise", methodPromise);
+
+      // // Race between the DepositOrWithdraw Promise and the timeout Promise
+      // [status, fee, amount] = await Promise.race([
+      //   methodPromise,
+      //   timeoutPromise(5 * 60 * 1000)
+      // ]);
+      // console.log("methodPromise", methodPromise);
+
       eth_price = await getPrice('ethereum');
 
     } catch (error) {
       eth_price = 3000; // Fallback price if fetching fails
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, wait_10s/2));
     }
 
     if (status) {
@@ -99,12 +117,12 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
       current_point += Math.floor(1.5 * eth_price * amount);
       total_fee += convertWeiToNumber(fee, 18, 8);
       console.log("Fee:", convertWeiToNumber(fee, 18, 8), "- ETH:", eth_price, "- Current Point:", current_point);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, wait_10s/2));
     }
     else {
       /** Xu ly lenh fail --> goi ham cancelTransaction */
-      await new Promise((resolve) => setTimeout(resolve, delayFailedTime * 4));
-      // check nonce if the transaction is still mine in delayFailedTime and have done
+      await new Promise((resolve) => setTimeout(resolve, wait_10s * 3));
+      // check nonce if the transaction is still mine in wait_10s and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
         console.log("Continue to next transaction...");
@@ -118,7 +136,7 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
         } catch (error) {
           console.error("Fee or point may not increase");
         }
-        await new Promise((resolve) => setTimeout(resolve, delayFailedTime));
+        await new Promise((resolve) => setTimeout(resolve, wait_10s));
       }
 
       /** Send `Cancel Transaction`  */
