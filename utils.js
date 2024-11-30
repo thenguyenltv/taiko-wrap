@@ -39,9 +39,10 @@ async function handleError(promise) {
   try {
     return await promise;
   } catch (error) {
-    console.error("Error:", error);
     // Handle the error appropriately here
-    return null; // or throw error if you want to propagate it
+    // return null; 
+    // or throw error if you want to propagate it
+    throw new Error(error);
   }
 }
 
