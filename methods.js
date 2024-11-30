@@ -58,18 +58,16 @@ async function cancelTransaction(latestGasPrice, account) {
 async function getTransactionFee(txHash) {
     try {
         const txReceipt = await web3.eth.getTransactionReceipt(txHash);
-        const tx = await web3.eth.getTransaction(txHash);
 
         const gasUsed = BigInt(txReceipt.gasUsed);
-        const gasPrice = BigInt(tx.gasPrice);
+        const gasPrice = BigInt(txReceipt.effectiveGasPrice);
 
         const fee = gasUsed * gasPrice;
-        // const feeInEther = web3.utils.fromWei(fee.toString(), 'ether');s
+        // const feeInEther = web3.utils.fromWei(fee.toString(), 'ether');
 
         return fee.toString();
     } catch (error) {
-        console.error('Get fee:', error.message);
-        return '0';
+        throw new Error(`Get fee failed with error ${error.message}`);
     }
 }
 
@@ -81,33 +79,36 @@ async function getTransactionFee(txHash) {
  * @returns {BigInt} - The transaction fee if the transaction is final, or 0n if it times out.
  */
 async function checkFinality(receipt) {
-
-    // Check receipt define
+    // Check receipt validity
     if (!receipt || typeof receipt !== 'object' || !receipt.blockNumber || !receipt.transactionHash) {
-        console.error('Invalid receipt object provided.');
-        return 0n;
+        throw new Error('Invalid receipt object provided.');
     }
 
     const startTime = Date.now();
     while (true) {
-        const currentBlock = await web3.eth.getBlockNumber();
-        if (currentBlock >= receipt.blockNumber) {
-            fee = await getTransactionFee(receipt.transactionHash);
-            // console.log("[checkFinality] Fee", fee);
-            return fee;
-        }
-        else {
-            // Wait for 5 seconds before checking again
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+        try {
+            const currentBlock = await handleError(web3.eth.getBlockNumber());
+            if (currentBlock >= receipt.blockNumber) {
+                const fee = await getTransactionFee(receipt.transactionHash);
+                if (fee !== '0') {
+                    return BigInt(fee);
+                }
+            } else {
+                // Wait for 5 seconds before checking again
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
+
+        } catch (error) {
+            console.error('Error checkFinality:', error.message);
         }
 
-        // Not running over 2 mins
-        if (Date.now() - startTime > 120000) {
-            console.error('Timeout exceeded while waiting for transaction finality.');
-            return 0n;
+        // Check timeout
+        if (Date.now() - startTime > 60000) {
+            throw new Error('Timeout exceeded while waiting for transaction finality.');
         }
     }
 }
+
 
 /**
  * 
@@ -194,8 +195,8 @@ async function deposit(SM_USE, chainID, amount_in_eth, account) {
         const max_fee_per_gas = CEIL_GAS;
 
         // Predict the gas fee
-        const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas); // a BigInt in wei
-
+        const pre_gas = (max_priority_fee_per_gas * BigInt(estimatedGas)).toString(); // a BigInt in wei
+        
         /** Transaction type 2 */
         const tx_params = {
             nonce,
@@ -209,28 +210,26 @@ async function deposit(SM_USE, chainID, amount_in_eth, account) {
             type: '0x2',
             chainID: chainID
         };
-
+        
         // double check the balance
         await new Promise((resolve) => setTimeout(resolve, 1000));
         const balance = await web3.eth.getBalance(account.address);
         if (balance < amount_in_wei) {
-            console.log("Insufficient balance to deposit:", convertWeiToNumber(balance), "ETH");
-            return;
+            throw new Error(`Insufficient balance to deposit: ${convertWeiToNumber(balance)} ETH`);
         }
-
+        
         // Sign and send the transaction
         const signedTx = await account.signTransaction(tx_params);
         // const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-
+        
         // Create a promise for sending the transaction
         const transactionPromise = web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-
         // Limit the receipt time to 5 minutes (300,000 milliseconds)
         const receipt = await Promise.race([
             transactionPromise,
             timeoutPromise(5 * 60 * 1000), // 5 minutes in milliseconds
         ]);
-
+        
         return [receipt, pre_gas];
     } catch (error) {
         console.error("An error occurred while depositing:", error.message);
@@ -259,7 +258,7 @@ async function withdraw(SM_USE, chainID, amount, account) {
         const max_fee_per_gas = CEIL_GAS;
 
         // Predict the gas fee
-        const pre_gas = max_priority_fee_per_gas * BigInt(estimatedGas); // a BigInt in wei
+        const pre_gas = (max_priority_fee_per_gas * BigInt(estimatedGas)).toString(); // a BigInt in wei
 
         /** Transaction type 2 */
         const tx_params = {
@@ -278,7 +277,7 @@ async function withdraw(SM_USE, chainID, amount, account) {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         const balance = await SM_USE.methods.balanceOf(account.address).call();
         if (balance < amount) {
-            console.log("Insufficient balance to withdraw:", amount);
+            console.log("Insufficient balance to withdraw:", convertWeiToNumber(amount));
             return;
         }
 
@@ -296,6 +295,7 @@ async function withdraw(SM_USE, chainID, amount, account) {
         ]);
 
         return [receipt, pre_gas];
+
     } catch (error) {
         console.error("An error occurred while withdrawing:", error.message);
     }
@@ -324,16 +324,17 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
     try {
         const balance = await web3.eth.getBalance(account.address);
 
+        // deposit
         if (balance > min_eth) {
 
             let amount_in_wei = balance - (BigInt(min_eth) / 2n);
-            
+
             if (chainID == 167009) {
                 // amount_in_wei = amount_in_wei / 25n;
                 console.log("\nAdjust amount in TESTNET...", convertWeiToNumber(amount_in_wei));
                 await new Promise((resolve) => setTimeout(resolve, 10000));
             }
-            
+
             let amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
             amount = Number(amountInEther);
 
@@ -343,6 +344,7 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
             fee = await checkFinality(receipt);
 
             return [status, fee, amount];
+        // Withdraw
         } else {
 
             const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
@@ -362,21 +364,23 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account) {
             return [status, fee, 0];
         }
     } catch (err) {
-        console.error("Failed Finality transaction:", err.message);
+        console.error("Wrap/Unwrap failed:", err.message);
+        // console.log("(In depo/withdraw) Predicted gas fee:", pre_gas, "ETH");
 
         // receipt undefined, dm await roi van return undefined, rpc dom?
-        if (err.message.includes("Invalid receipt object provided") 
+        if (err.message.includes("Invalid receipt object provided")
             || err.message.includes("Transaction not found")) {
+            status = false;
             fee = pre_gas;
             amount = amount === 0 ? 0.2 : amount;
         }
-
+        
         if (fee == 0n) {
             status = false;
             fee = pre_gas;
         }
 
-        return [ status, fee, amount ];
+        return [status, fee, amount];
     }
 }
 

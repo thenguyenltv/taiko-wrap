@@ -1,6 +1,6 @@
 module.exports = {
   CEIL_GAS: 200000002n, // 1 gwei = 1.000.000.000 wei
-  MIN_BALANCE: 0.0006, // ETH units, the minimum balance to keep in the account
+  MIN_BALANCE: 0.0004, // ETH units, the minimum balance to keep in the account
   LOG_FILE: "wrap_log.log",
   RPC_URL: "https://rpc.ankr.com/taiko/a4d0b9019e455492c401aa9499bb36139980e8772bb41b304c4cd2afd4443a42", 
     // https://rpc.mainnet.taiko.xyz
