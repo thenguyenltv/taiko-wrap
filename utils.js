@@ -72,6 +72,15 @@ async function getPrice(ids) {
   }
 }
 
+function shortAddress(address) {
+  if (address.length < 8) {
+    return address; // or handle the case where the address is too short
+  }
+  const firstFour = address.substring(0, 4);
+  const lastFour = address.substring(address.length - 4);
+  return firstFour + "..." + lastFour;
+}
+
 /**
  * Helper function for timeout
  */
@@ -88,17 +97,15 @@ function logElapsedTime(start) {
   const minutes = Math.floor((time % 3600) / 60);
   const seconds = Math.round(time % 60 * 100) / 100;
 
-  console.log(
-    `--> Time elapsed: ${hours}h${minutes}m${seconds}s`
-  );
+  return [hours, minutes, seconds];
 }
-
 
 module.exports = {
   handleError,
   getPrice,
   convertWeiToNumber,
   timeoutPromise,
+  shortAddress,
   logMessage,
   logElapsedTime
 };

@@ -1,8 +1,8 @@
 module.exports = {
-  CEIL_GAS: 200000002n, // 1 gwei = 1.000.000.000 wei
+  CEIL_GAS: 100000002n, // 1 gwei = 1.000.000.000 wei
+  MIN_GAS_PRICE: 30000000n,
   MIN_BALANCE: 0.0004, // ETH units, the minimum balance to keep in the account
   LOG_FILE: "wrap_log.log",
-  RPC_URL: "https://rpc.ankr.com/taiko/a4d0b9019e455492c401aa9499bb36139980e8772bb41b304c4cd2afd4443a42", 
     // https://rpc.mainnet.taiko.xyz
     // https://rpc.taiko.xyz
     // https://mainnet.taiko-rpc.com/
@@ -12,6 +12,7 @@ module.exports = {
     // https://rpc.ankr.com/taiko/92f19728a43f08d9aa5600b526678df10e753c8b600a68c5a644623eb6c7acb6
 
     // https://rpc.hekla.taiko.xyz
+    // https://taiko-hekla.gateway.tenderly.co/7H3yO1Br2LR3cPgBu24F3c
 
     SM_ADDRESS: "0xA51894664A773981C6C112C43ce576f315d5b1B6", 
     TEST_SM_WETH: '0xae2C46ddb314B9Ba743C6dEE4878F151881333D9',
