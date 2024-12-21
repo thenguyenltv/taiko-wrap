@@ -68,9 +68,8 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
 
   let duraGasPrice = await getLowGasPrice(CEIL_GAS);
 
-
   const StartNonce = await handleError(web3.eth.getTransactionCount(account.address));
-  let current_point = 1, total_fee = 0;
+  let current_point = 1, current_fee = 0;
   let tnx_count = 0;
   let wait_10s = 10000; // unit (ms), 1000ms = 1s
   let start = new Date().getTime();
@@ -78,7 +77,7 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
 
   await new Promise((resolve) => setTimeout(resolve, wait_10s / 2));
 
-  while (total_fee < MAX_FEE) {
+  while (current_point < TOTAL_POINT || current_fee < MAX_FEE) {
 
     /* Try sending transaction */
     let status = false, fee = 0n, amount = 0, gasPrice = 200000002n;
@@ -110,11 +109,11 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
       tnx_count++;
       current_point += Math.floor(1.5 * eth_price * amount);
       if (typeof fee === 'bigint') {
-        total_fee += convertWeiToNumber(fee, 18, 8);
+        current_fee += convertWeiToNumber(fee, 18, 8);
       } else {
         console.error('Fee is not a BigInt:', fee);
       }
-      console.log("Fee:", convertWeiToNumber(fee, 18, 8), "- Current Fee:", Number(total_fee.toPrecision(3)), "- Current Point:", current_point);
+      console.log("Fee:", convertWeiToNumber(fee, 18, 8), "- Current Fee:", Number(current_fee.toPrecision(3)), "- Current Point:", current_point);
       await new Promise((resolve) => setTimeout(resolve, wait_10s));
     }
     else {
@@ -130,11 +129,11 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
           tnx_count++;
           current_point += Math.floor(1.5 * eth_price * amount);
           if (typeof fee === 'bigint') {
-            total_fee += convertWeiToNumber(fee, 18, 8);
+            current_fee += convertWeiToNumber(fee, 18, 8);
           } else {
             console.error('Fee is not a BigInt:', fee);
           }
-          console.log("(Maybe wrong) Fee:", convertWeiToNumber(fee, 18, 8), "- Current Fee:", Number(total_fee.toPrecision(3)), "- Current Point:", current_point);
+          console.log("(Maybe wrong) Fee:", convertWeiToNumber(fee, 18, 8), "- Current Fee:", Number(current_fee.toPrecision(3)), "- Current Point:", current_point);
 
         } catch (error) {
           console.error("Fee or point may not increase");
@@ -159,7 +158,7 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
     );
 
     /** Stop Condition */
-    if (current_point > TOTAL_POINT || total_fee > MAX_FEE) {
+    if (current_point > TOTAL_POINT || current_fee > MAX_FEE) {
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
 
       try {
@@ -169,12 +168,12 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
           currentTime.setHours(currentTime.getHours() + 7);
           const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
           console.log(
-            `\n==> [${shortDate}] ${account.address} - ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points\n`
+            `\n==> [${shortDate}] ${account.address} - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points\n`
           );
 
           const [hours, minutes, _] = logElapsedTime(start);
           logMessage(
-            `${shortAddress(account.address)} - ${tnx_count} txs - ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h${minutes}m`
+            `${shortAddress(account.address)} - ${tnx_count} txs - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h${minutes}m`
           );
 
           return;
