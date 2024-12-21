@@ -79,31 +79,6 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
   await new Promise((resolve) => setTimeout(resolve, wait_10s / 2));
 
   while (total_fee < MAX_FEE) {
-    /** Stop Condition */
-    if (TOTAL_POINT > 0 && current_point > TOTAL_POINT) {
-      const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
-
-      try {
-        if (balance_in_eth > MIN_BALANCE) {
-
-          const currentTime = new Date();
-          currentTime.setHours(currentTime.getHours() + 7);
-          const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
-          console.log(
-            `\n==> [${shortDate}] ${account.address} - ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points\n`
-          );
-
-          const [hours, minutes, _] = logElapsedTime(start);
-          logMessage(
-            `${shortAddress(account.address)} - ${Number(total_fee.toPrecision(3))} ETH - ${current_point} Points - Time ${hours}h${minutes}m`
-          );
-
-          return;
-        }
-      } catch (error) {
-        console.error('An error occurred:', error);
-      }
-    }
 
     /* Try sending transaction */
     let status = false, fee = 0n, amount = 0, gasPrice = 200000002n;
@@ -183,19 +158,30 @@ async function startTransactions(SM_USE, chainID, account, TOTAL_POINT) {
       `--> Time elapsed: ${hours}h${minutes}m${seconds}s`
     );
 
-    if (total_fee >= MAX_FEE) {
-      const currentTime = new Date();
-      currentTime.setHours(currentTime.getHours() + 7);
-      const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
-      console.log(
-        `\n==> [${shortDate}] ${account.address} - ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points\n`
-      );
+    /** Stop Condition */
+    if (current_point > TOTAL_POINT || total_fee > MAX_FEE) {
+      const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
 
-      const [hours, minutes, _] = logElapsedTime(start);
-      logMessage(
-        `${shortAddress(account.address)} - ${tnx_count} txs -  ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h ${minutes}m`
-      );
-      return;
+      try {
+        if (balance_in_eth > MIN_BALANCE) {
+
+          const currentTime = new Date();
+          currentTime.setHours(currentTime.getHours() + 7);
+          const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
+          console.log(
+            `\n==> [${shortDate}] ${account.address} - ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points\n`
+          );
+
+          const [hours, minutes, _] = logElapsedTime(start);
+          logMessage(
+            `${shortAddress(account.address)} - ${tnx_count} txs - ${Number(total_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h${minutes}m`
+          );
+
+          return;
+        }
+      } catch (error) {
+        console.error('An error occurred:', error);
+      }
     }
   }
 }
