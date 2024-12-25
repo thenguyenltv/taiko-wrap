@@ -269,11 +269,24 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, lastestGasPrice)
             chainID: chainID
         };
 
-        // double check the balance
-        await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
-        const balance = await web3.eth.getBalance(account.address);
-        if (balance < amount_in_wei) {
-            throw new Error(`Insufficient balance to deposit: ${convertWeiToNumber(balance)} ETH`);
+        async () => {
+            let balance = await web3.eth.getBalance(account.address);
+            let attempts = 0;
+            const maxAttempts = 5;
+
+            while (balance < BigInt(amount_in_wei) && attempts < maxAttempts) {
+                // double check the balance
+                if (balance >= BigInt(amount_in_wei)) {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, wait_3s / 6));
+                balance = await web3.eth.getBalance(account.address);
+                attempts++;
+            }
+
+            if (balance < BigInt(amount_in_wei)) {
+                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH`);
+            }
         }
 
         // Sign and send the transaction
@@ -340,17 +353,29 @@ async function withdraw(SM_USE, chainID, amount, account, lastestGasPrice) {
             chainID: chainID
         };
 
-        // double check the balance
-        await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
-        const balance = await SM_USE.methods.balanceOf(account.address).call();
-        if (balance < amount) {
-            throw new Error(`Insufficient balance to withdraw: ${convertWeiToNumber(balance)} ETH`);
+        async () => {
+            let balance = await SM_USE.methods.balanceOf(account.address).call();
+            let attempts = 0;
+            const maxAttempts = 5;
+
+            while (balance < amount && attempts < maxAttempts) {
+                // double check the balance
+                if (balance >= amount) {
+                    break;
+                }
+                await new Promise((resolve) => setTimeout(resolve, wait_3s / 6));
+                balance = await web3.eth.getBalance(account.address);
+                attempts++;
+            }
+
+            if (balance < amount) {
+                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balance)} WETH`);
+            }
         }
 
         // Send the transaction
         const signedTx = await account.signTransaction(tx_params);
         // const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-
         // // Create a promise for sending the transaction
         const transactionPromise = web3.eth.sendSignedTransaction(signedTx.rawTransaction);
 
@@ -382,19 +407,23 @@ async function withdraw(SM_USE, chainID, amount, account, lastestGasPrice) {
  *    - {bigint} fee - Total gas fee incurred for the transactions.
  *    - {number} amount - The amount of ETH involved in the transaction, represented as a number.
  */
-async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, lastestGasPrice) {
-    const min_eth = web3.utils.toWei(MIN_BALANCE.toString(), 'ether');
+async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, lastestGasPrice) {
+    const min_eth = BigInt(web3.utils.toWei(MIN_BALANCE.toString(), 'ether'));
     let status = true;
     let fee = 0n;
     let receipt, pre_gas = 0n, amount = 0, gas_price = 200000002n;
 
     try {
-        const balance = await web3.eth.getBalance(account.address);
 
-        // deposit
-        if (balance > min_eth) {
+        // typeTnx=0 --> deposit
+        if (typeTnx === 0) {
+            console.log("Deposit...");
 
+            const balance = await web3.eth.getBalance(account.address);
             let amount_in_wei = balance - (BigInt(min_eth) / 2n);
+            if (amount_in_wei < min_eth) {
+                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH`);
+            }
 
             if (chainID == 167009) {
                 // amount_in_wei = amount_in_wei / 25n;
@@ -414,18 +443,23 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, lastestGasP
             fee = await checkFinality(receipt);
 
             // check until balance of WETH >= amount_in_wei
-            let newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
-            while (newBalanceOf < amount_in_wei) {
-                newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
-                await new Promise((resolve) => setTimeout(resolve, wait_3s / 2));
+            async () => {
+                let newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
+                while (newBalanceOf < amount_in_wei) {
+                    newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
+                    await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
+                }
             }
 
             return [status, fee, amount, gas_price];
-            // Withdraw
-        } else {
-
+        }
+        else { // typeTnx=1 --> withdraw
+            console.log("Withdraw...");
             const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (balanceOf / BigInt(500));
+            if (weth_in_wei < min_eth) {
+                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balanceOf)} WETH`);
+            }
 
             if (chainID == 167009) {
                 // weth_in_wei = weth_in_wei / 25n;
@@ -441,10 +475,12 @@ async function DepositOrWithdraw(SM_USE, chainID, indexTnx, account, lastestGasP
             fee = await checkFinality(receipt);
 
             // check until balance of ETH >= weth_in_wei
-            let newBalance = await web3.eth.getBalance(account.address);
-            while (newBalance < weth_in_wei) {
-                newBalance = await web3.eth.getBalance(account.address);
-                await new Promise((resolve) => setTimeout(resolve, wait_3s / 2));
+            async () => {
+                let newBalance = await web3.eth.getBalance(account.address);
+                while (newBalance < weth_in_wei) {
+                    newBalance = await web3.eth.getBalance(account.address);
+                    await new Promise((resolve) => setTimeout(resolve, wait_3s / 2));
+                }
             }
 
             return [status, fee, 0, gas_price];
