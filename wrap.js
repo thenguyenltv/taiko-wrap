@@ -255,6 +255,7 @@ async function main() {
         while (balance > minEthBalance) {
           try {
             await sendFunds(currentAccount, nextAccount.address, amount_to_send);
+            balance = await web3.eth.getBalance(currentAccount.address);
           } catch (error) {
             console.error("Error sending funds:", error);
           }
