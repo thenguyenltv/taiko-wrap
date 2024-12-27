@@ -111,6 +111,7 @@ async function startTransactions(SM_USE, chainID, account) {
         gasPrice = 200000002n;
       }
       duraGasPrice = gasPrice < min_gwei ? min_gwei : gasPrice;
+      console.log("Gas Price:", web3.utils.fromWei(duraGasPrice.toString(), 'gwei'), "Gwei");
 
       // ================== DepositOrWithdraw ==================
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(typeTnx, SM_USE, chainID, tnx_count, account, duraGasPrice);

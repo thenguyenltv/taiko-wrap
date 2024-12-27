@@ -124,7 +124,6 @@ async function getLowGasPrice(lastestGas = 200000002n, pollingInterval = 700, ma
     try {
         let lowestGasPrice = await handleError(web3.eth.getGasPrice());
         if (lowestGasPrice <= lastestGas + 1n) {
-            console.log(`Final adjusted gas price: ${convertWeiToNumber(lowestGasPrice, 9, 3)} gwei`);
             await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
             return lowestGasPrice;
         }
@@ -138,7 +137,6 @@ async function getLowGasPrice(lastestGas = 200000002n, pollingInterval = 700, ma
 
             let currentGasPrice = await handleError(web3.eth.getGasPrice());
             if (currentGasPrice <= lastestGas) {
-                console.log(`Final adjusted gas price: ${convertWeiToNumber(currentGasPrice, 9, 3)} gwei`);
                 await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
                 return currentGasPrice;
             }
@@ -407,7 +405,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
     let receipt, pre_gas = 0n, amount = 0, gas_price = 200000002n;
 
     try {
-
         // typeTnx=0 --> deposit
         if (typeTnx === 0) {
             const balance = await web3.eth.getBalance(account.address);
