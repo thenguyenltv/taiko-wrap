@@ -66,8 +66,8 @@ const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
 const SM_USE = IsTestnet === true ? TEST_SM_WRAP : SM_WRAP;
 const chainID = IsTestnet === true ? Testnet : Mainnet;
 
-const min_gwei = MIN_GAS !== undefined ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
-console.log("Min Gas Price:", min_gwei);
+const min_gwei = (MIN_GAS !== undefined && !isNaN(MIN_GAS)) ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
+console.log("Min Gas Price:", web3.utils.fromWei(min_gwei.toString(), 'gwei'), "Gwei");
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -76,7 +76,7 @@ const rl = readline.createInterface({
 
 async function startTransactions(SM_USE, chainID, account) {
 
-  let duraGasPrice = await getLowGasPrice(CEIL_GAS);
+  let duraGasPrice = await handleError(web3.eth.getGasPrice());
 
   const StartNonce = await handleError(web3.eth.getTransactionCount(account.address));
   let current_point = 1, current_fee = 0;
@@ -92,7 +92,8 @@ async function startTransactions(SM_USE, chainID, account) {
   while (true) {
 
     /* Try sending transaction */
-    let status = false, fee = 0n, amount = 0, gasPrice = 200000002n;
+    let status = false, fee = 0n, amount = 0
+    let gasPrice = await getLowGasPrice(CEIL_GAS);
     try {
       //get balance of account
       const balance = await handleError(web3.eth.getBalance(account.address));
@@ -181,7 +182,7 @@ async function startTransactions(SM_USE, chainID, account) {
     /* Print the time consumed */
     const [hours, minutes, seconds] = logElapsedTime(start);
     console.log(
-      `--> Time elapsed: ${hours}h${minutes}m${seconds}s`
+      `--> Time elapsed: ${hours}h${minutes}m${seconds}s\n`
     );
 
     /** Stop Condition 

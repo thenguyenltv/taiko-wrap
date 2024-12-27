@@ -29,7 +29,6 @@ const {
 
 const wait_3s = 3000;
 
-
 /**
  * Retrieves and calculates the transaction fee for a given transaction hash.
  * 
@@ -121,10 +120,10 @@ async function checkFinality(receipt) {
  * @param {*} maxDuration - Total duration in milliseconds for polling gas prices (default: 5000ms or 5 seconds).
  * @returns {Promise<BigInt>} - The adjusted lowest gas price after polling.
  */
-async function getLowGasPrice(baseGas = 200000002n, pollingInterval = 700, maxDuration = 10000) {
+async function getLowGasPrice(lastestGas = 200000002n, pollingInterval = 700, maxDuration = 10000) {
     try {
         let lowestGasPrice = await handleError(web3.eth.getGasPrice());
-        if (lowestGasPrice <= baseGas + 1n && lowestGasPrice >= MIN_GAS_PRICE - 1n) {
+        if (lowestGasPrice <= lastestGas + 1n) {
             console.log(`Final adjusted gas price: ${convertWeiToNumber(lowestGasPrice, 9, 3)} gwei`);
             await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
             return lowestGasPrice;
@@ -138,8 +137,7 @@ async function getLowGasPrice(baseGas = 200000002n, pollingInterval = 700, maxDu
             await new Promise(resolve => setTimeout(resolve, pollingInterval)); // Wait for the polling interval
 
             let currentGasPrice = await handleError(web3.eth.getGasPrice());
-            if (currentGasPrice <= baseGas) {
-                currentGasPrice = currentGasPrice < MIN_GAS_PRICE ? MIN_GAS_PRICE : currentGasPrice;
+            if (currentGasPrice <= lastestGas) {
                 console.log(`Final adjusted gas price: ${convertWeiToNumber(currentGasPrice, 9, 3)} gwei`);
                 await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
                 return currentGasPrice;
@@ -160,10 +158,7 @@ async function getLowGasPrice(baseGas = 200000002n, pollingInterval = 700, maxDu
         lowestGasPrice = BigInt(lowestGasPrice) +
             (BigInt(secondLowestGasPrice) - BigInt(lowestGasPrice)) / BigInt(2);
 
-        // set minimum gas price
-        lowestGasPrice = lowestGasPrice < MIN_GAS_PRICE ? MIN_GAS_PRICE : lowestGasPrice;
-
-        console.log(`Final adjusted gas price: ${convertWeiToNumber(lowestGasPrice, 9, 3)} gwei`);
+        // console.log(`Final adjusted gas price: ${convertWeiToNumber(lowestGasPrice, 9, 3)} gwei`);
 
         return lowestGasPrice;
     } catch (error) {
@@ -231,7 +226,7 @@ const sendFunds = async (fromAccount, toAddress, amount) => {
  * @param {account} account 
  * @returns 
  */
-async function deposit(SM_USE, chainID, amount_in_eth, account, lastestGasPrice) {
+async function deposit(SM_USE, chainID, amount_in_eth, account, tnxGasPrice) {
     let pre_gas = 0n, gas_price = 200000002n;
     try {
         // Prepare the transaction
@@ -241,9 +236,9 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, lastestGasPrice)
         const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
         const txData = SM_USE.methods.deposit(amount_in_eth).encodeABI();
 
-        gas_price = await getLowGasPrice(lastestGasPrice);
-        // const gas_price = 20000000n;
-        const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
+        gas_price = (tnxGasPrice !== undefined) ? BigInt(tnxGasPrice) : await getLowGasPrice(200000002n);
+
+        const max_priority_fee_per_gas = gas_price * BigInt(100 + 0) / BigInt(100);
         const max_fee_per_gas = CEIL_GAS;
 
         // revert if CEIL_GAS < max_priority_fee_per_gas
@@ -313,8 +308,8 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, lastestGasPrice)
  * 
  * Function to withdraw funds from the wrapped token contract
 */
-async function withdraw(SM_USE, chainID, amount, account, lastestGasPrice) {
-    let pre_gas = 0n, gas_price = 200000002n;
+async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
+    let pre_gas = 0n, gas_price;
     try {
         // Prepare the transaction
         // let weth_in_wei = amount - (amount / BigInt(500));
@@ -326,9 +321,8 @@ async function withdraw(SM_USE, chainID, amount, account, lastestGasPrice) {
         });
         const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
         const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
-        gas_price = await getLowGasPrice(lastestGasPrice);
-        // const gas_price = 20000000n;
-        const max_priority_fee_per_gas = gas_price * BigInt(100 + 1) / BigInt(100);
+        gas_price = (tnxGasPrice !== undefined) ? BigInt(tnxGasPrice) : await getLowGasPrice(200000002n);
+        const max_priority_fee_per_gas = gas_price * BigInt(100 + 0) / BigInt(100);
         const max_fee_per_gas = CEIL_GAS;
 
         // revert if CEIL_GAS < max_priority_fee_per_gas
@@ -406,7 +400,7 @@ async function withdraw(SM_USE, chainID, amount, account, lastestGasPrice) {
  *    - {bigint} fee - Total gas fee incurred for the transactions.
  *    - {number} amount - The amount of ETH involved in the transaction, represented as a number.
  */
-async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, lastestGasPrice) {
+async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tnxGasPrice) {
     const min_eth = BigInt(web3.utils.toWei(MIN_BALANCE.toString(), 'ether'));
     let status = true;
     let fee = 0n;
@@ -416,8 +410,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, la
 
         // typeTnx=0 --> deposit
         if (typeTnx === 0) {
-            console.log("Deposit...");
-
             const balance = await web3.eth.getBalance(account.address);
             let amount_in_wei = balance - (BigInt(min_eth) / 2n);
             if (amount_in_wei < min_eth) {
@@ -435,7 +427,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, la
 
             console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
             // ============================================
-            [receipt, pre_gas, gas_price] = await deposit(SM_USE, chainID, amountInEther, account, lastestGasPrice);
+            [receipt, pre_gas, gas_price] = await deposit(SM_USE, chainID, amountInEther, account, tnxGasPrice);
             // ============================================
 
             // await new Promise((resolve) => setTimeout(resolve, wait_3s));
@@ -453,7 +445,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, la
             return [status, fee, amount, gas_price];
         }
         else { // typeTnx=1 --> withdraw
-            console.log("Withdraw...");
             const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (balanceOf / BigInt(500));
             if (weth_in_wei < min_eth) {
@@ -468,7 +459,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, la
 
             console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(weth_in_wei), "WETH to ETH");
             // ============================================
-            [receipt, pre_gas, gas_price] = await withdraw(SM_USE, chainID, weth_in_wei, account, lastestGasPrice);
+            [receipt, pre_gas, gas_price] = await withdraw(SM_USE, chainID, weth_in_wei, account, tnxGasPrice);
             // ============================================
 
             fee = await checkFinality(receipt);
