@@ -97,7 +97,7 @@ async function startTransactions(SM_USE, chainID, account) {
     try {
       //get balance of account
       const balance = await handleError(web3.eth.getBalance(account.address));
-      const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (BigInt(MIN_BALANCE) / 2n);
+      const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (MIN_BALANCE / 2);
       if (typeTnx === -1) {
         if (balance_in_eth > MIN_BALANCE) {
           typeTnx = 0;
