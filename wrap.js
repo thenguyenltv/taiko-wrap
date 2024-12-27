@@ -166,12 +166,13 @@ async function startTransactions(SM_USE, chainID, account) {
       else {
         failed_tnx_count++;
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 3, the transaction will be canceled");
-        if (failed_tnx_count > 3) {
+        if (failed_tnx_count >= 3) {
           /** Send `Cancel Transaction`  */
           const latestGasPrice = await handleError(web3.eth.getGasPrice());
           const receipt = await handleError(cancelTransaction(latestGasPrice, account));
           if (receipt) {
             console.log("Cancel transaction successfully");
+            failed_tnx_count = 0;
           }
         }
       }

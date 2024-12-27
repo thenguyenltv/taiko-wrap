@@ -12,7 +12,7 @@ const path = require('path');
  */
 function logMessage(message) {
   const logFilePath = path.join(__dirname, LOG_FILE);
-  const timestamp = new Date().toLocaleTimeString(); // Add a timestamp
+  const timestamp = new Date().toLocaleString(); // Add a timestamp
   const log = `[${timestamp}] ${message}\n`;
 
   // Append the log message to the file
