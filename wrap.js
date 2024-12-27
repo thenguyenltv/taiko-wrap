@@ -8,6 +8,10 @@ const PRIVATE_KEYS = [
   process.env.KEY4,
   process.env.KEY5,
   process.env.KEY6,
+  process.env.KEY7,
+  process.env.KEY8,
+  process.env.KEY9,
+  process.env.KEY10,
 ].filter(Boolean); // Danh sách các private keys
 
 
@@ -15,6 +19,7 @@ let RPC_URL = process.env.RPC_URL;
 RPC_URL = RPC_URL == undefined ? "https://rpc.hekla.taiko.xyz" : RPC_URL;
 let TOTAL_POINT = Number(process.argv[2]);
 const MAX_FEE = Number(process.argv[3]);
+const MIN_GAS = Number(process.argv[4]);
 
 const {
   handleError,
@@ -37,6 +42,7 @@ const {
   cancelTransaction,
   sendFunds,
   getLowGasPrice,
+  checkFinality,
   DepositOrWithdraw,
 } = require('./methods');
 
@@ -60,6 +66,9 @@ const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
 const SM_USE = IsTestnet === true ? TEST_SM_WRAP : SM_WRAP;
 const chainID = IsTestnet === true ? Testnet : Mainnet;
 
+const min_gwei = MIN_GAS !== undefined ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
+console.log("Min Gas Price:", min_gwei);
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -71,7 +80,7 @@ async function startTransactions(SM_USE, chainID, account) {
 
   const StartNonce = await handleError(web3.eth.getTransactionCount(account.address));
   let current_point = 1, current_fee = 0;
-  let tnx_count = 0;
+  let tnx_count = 0, failed_tnx_count = 0;
   let wait_10s = 10000; // unit (ms), 1000ms = 1s
   let start = new Date().getTime();
   let eth_price = 0;
@@ -88,7 +97,7 @@ async function startTransactions(SM_USE, chainID, account) {
       //get balance of account
       const balance = await handleError(web3.eth.getBalance(account.address));
       const balance_in_eth = convertWeiToNumber(balance, 18, 5);
-      if (typeTnx === -1){
+      if (typeTnx === -1) {
         if (balance_in_eth > MIN_BALANCE) {
           typeTnx = 0;
         } else {
@@ -100,7 +109,7 @@ async function startTransactions(SM_USE, chainID, account) {
       if (gasPrice === null || gasPrice === undefined || gasPrice === 0n) {
         gasPrice = 200000002n;
       }
-      duraGasPrice = gasPrice < MIN_GAS_PRICE ? MIN_GAS_PRICE : gasPrice;
+      duraGasPrice = gasPrice < min_gwei ? min_gwei : gasPrice;
 
       // ================== DepositOrWithdraw ==================
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(typeTnx, SM_USE, chainID, tnx_count, account, duraGasPrice);
@@ -138,7 +147,6 @@ async function startTransactions(SM_USE, chainID, account) {
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
         console.log("Continue to next transaction...");
-
         // Cong 1 cho tnx_count
         try {
           tnx_count++;
@@ -155,15 +163,18 @@ async function startTransactions(SM_USE, chainID, account) {
         }
         // await new Promise((resolve) => setTimeout(resolve, wait_10s));
       }
-
-      /** Send `Cancel Transaction`  */
-      // // Các dòng mã phía dưới sẽ không được thực hiện nếu điều kiện if ở trên đúng
-      // const latestGasPrice = await handleError(web3.eth.getGasPrice());
-      // console.log("Transaction failed, Start canceling transaction...");
-      // const receipt = await handleError(cancelTransaction(latestGasPrice, account));
-      // if (receipt) {
-      //   console.log("Cancel transaction successfully");
-      // }
+      else {
+        failed_tnx_count++;
+        console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 3, the transaction will be canceled");
+        if (failed_tnx_count > 3) {
+          /** Send `Cancel Transaction`  */
+          const latestGasPrice = await handleError(web3.eth.getGasPrice());
+          const receipt = await handleError(cancelTransaction(latestGasPrice, account));
+          if (receipt) {
+            console.log("Cancel transaction successfully");
+          }
+        }
+      }
     }
 
     /* Print the time consumed */
@@ -241,21 +252,24 @@ async function main() {
       await processWallet(currentAccount);
 
       const balance = await handleError(web3.eth.getBalance(currentAccount.address));
-      // = 99,7% balance
-
+      // amount_to_send = 99,7% balance
       let amount_to_send = web3.utils.fromWei(((balance * 998n) / 1000n).toString(), 'ether');
-      // let amount_to_send = AMOUNT_TO_SEND;
-      console.log(`Sending ${amount_to_send} ETH to the next wallet...`);
-
       if (ACCOUNTS.length > 1) {
-        console.log(`Sending funds to the next wallet: ${nextAccount.address}`);
+        console.log(`Sending ${amount_to_send} to the next wallet: ${nextAccount.address}`);
 
         let balance = await web3.eth.getBalance(currentAccount.address);
         const minEthBalance = BigInt(web3.utils.toWei('0.01', 'ether'));
-        while (balance > minEthBalance) {
+        let attempts = 0, maxAttempts = 5;
+        while (balance > minEthBalance && attempts < maxAttempts) {
           try {
-            await sendFunds(currentAccount, nextAccount.address, amount_to_send);
+            const receipt = await sendFunds(currentAccount, nextAccount.address, amount_to_send);
             balance = await web3.eth.getBalance(currentAccount.address);
+            const fee = checkFinality(receipt);
+            if (fee !== 0n || fee !== undefined) {
+              console.log(`Funds sent from ${fromAccount.address} to ${toAddress}: ${amount} ETH`);
+              break;
+            }
+            attempts++;
           } catch (error) {
             console.error("Error sending funds:", error);
           }

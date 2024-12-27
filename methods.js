@@ -218,7 +218,6 @@ const sendFunds = async (fromAccount, toAddress, amount) => {
         };
         const signedTx = await fromAccount.signTransaction(tx);
         const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
-        console.log(`Funds sent from ${fromAccount.address} to ${toAddress}: ${amount} ETH`);
         return receipt;
     } catch (error) {
         console.error(`Error sending funds from ${fromAccount.address} to ${toAddress}:`, error);
@@ -509,6 +508,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, la
 module.exports = {
     cancelTransaction,
     sendFunds,
+    checkFinality,
     deposit,
     withdraw,
     DepositOrWithdraw,
