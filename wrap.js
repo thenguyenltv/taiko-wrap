@@ -269,7 +269,7 @@ async function main() {
             balance = await web3.eth.getBalance(currentAccount.address);
             const fee = checkFinality(receipt);
             if (fee !== 0n || fee !== undefined) {
-              console.log(`Funds sent from ${fromAccount.address} to ${toAddress}: ${amount} ETH`);
+              console.log(`Funds sent from ${currentAccount.address} to ${nextAccount.address}: ${amount_to_send} ETH`);
               break;
             }
             attempts++;
