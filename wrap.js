@@ -17,6 +17,9 @@ const PRIVATE_KEYS = [
 
 let RPC_URL = process.env.RPC_URL;
 RPC_URL = RPC_URL == undefined ? "https://rpc.hekla.taiko.xyz" : RPC_URL;
+const SUB_RPC1 = process.env.SUB_RPC1;
+const SUB_RPC2 = process.env.SUB_RPC2;
+const ListRPC = [RPC_URL];
 let TOTAL_POINT = Number(process.argv[2]);
 const MAX_FEE = Number(process.argv[3]);
 const MIN_GAS = Number(process.argv[4]);
@@ -57,7 +60,7 @@ const {
 } = require('./constant');
 const { type } = require('os');
 
-const web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
+let web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
 
 const SM_WRAP = new web3.eth.Contract(SM_ABI, SM_ADDRESS);
 const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
@@ -65,6 +68,7 @@ const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
 const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
 const SM_USE = IsTestnet === true ? TEST_SM_WRAP : SM_WRAP;
 const chainID = IsTestnet === true ? Testnet : Mainnet;
+const WAIT_60S = 60000;
 
 const min_gwei = (MIN_GAS !== undefined && !isNaN(MIN_GAS)) ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
 console.log("Min Gas Price:", web3.utils.fromWei(min_gwei.toString(), 'gwei'), "Gwei");
@@ -85,7 +89,7 @@ async function startTransactions(SM_USE, chainID, account) {
   let start = new Date().getTime();
   let eth_price = 0;
 
-  let typeTnx = -1; // 0: Deposit, 1: Withdraw
+  let isTnxWithdraw = -1; // 0: Deposit, 1: Withdraw
 
   await new Promise((resolve) => setTimeout(resolve, wait_10s / 2));
 
@@ -95,14 +99,14 @@ async function startTransactions(SM_USE, chainID, account) {
     let status = false, fee = 0n, amount = 0
     let gasPrice = await getLowGasPrice(CEIL_GAS);
     try {
-      //get balance of account
+      console.log(`Start wrap/unwrap of ${shortAddress(account.address)}`)
       const balance = await handleError(web3.eth.getBalance(account.address));
       const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (MIN_BALANCE / 2);
-      if (typeTnx === -1) {
+      if (isTnxWithdraw === -1) {
         if (balance_in_eth > MIN_BALANCE) {
-          typeTnx = 0;
+          isTnxWithdraw = 0; // Deposit
         } else {
-          typeTnx = 1;
+          isTnxWithdraw = 1; // Withdraw
         }
       }
 
@@ -114,7 +118,7 @@ async function startTransactions(SM_USE, chainID, account) {
       console.log("Gas Price:", web3.utils.fromWei(duraGasPrice.toString(), 'gwei'), "Gwei");
 
       // ================== DepositOrWithdraw ==================
-      [status, fee, amount, gasPrice] = await DepositOrWithdraw(typeTnx, SM_USE, chainID, tnx_count, account, duraGasPrice);
+      [status, fee, amount, gasPrice] = await DepositOrWithdraw(isTnxWithdraw, SM_USE, chainID, tnx_count, account, duraGasPrice);
       // ================== DepositOrWithdraw ==================
 
       // check fee is number
@@ -132,7 +136,8 @@ async function startTransactions(SM_USE, chainID, account) {
 
     if (status) {
       tnx_count++;
-      typeTnx = 1 - typeTnx;
+      failed_tnx_count = 0;
+      isTnxWithdraw = 1 - isTnxWithdraw;
       current_point += Math.floor(1.5 * eth_price * amount);
       if (typeof fee === 'bigint') {
         current_fee += convertWeiToNumber(fee, 18, 8);
@@ -168,15 +173,22 @@ async function startTransactions(SM_USE, chainID, account) {
       else {
         failed_tnx_count++;
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 3, the transaction will be canceled");
-        if (failed_tnx_count >= 3) {
-          /** Send `Cancel Transaction`  */
+        if (failed_tnx_count >= 2) {
+          /** Send `Cancel Transaction` */
           const latestGasPrice = await handleError(web3.eth.getGasPrice());
           const receipt = await handleError(cancelTransaction(latestGasPrice, account));
           if (receipt) {
             console.log("Cancel transaction successfully");
+            tnx_count++;
             failed_tnx_count = 0;
+            await new Promise((resolve) => setTimeout(resolve, wait_10s * 3));
           }
+
+          web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
+          console.log("Switch to RPC:", web3.providers);
+
         }
+        await new Promise((resolve) => setTimeout(resolve, wait_10s));
       }
     }
 
@@ -188,18 +200,18 @@ async function startTransactions(SM_USE, chainID, account) {
 
     /** Stop Condition 
      * 1. Đạt được số điểm tối đa
-     * 2. Phí giao dịch vượt quá giới hạn
-     * 3. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
+     * Or Phí giao dịch vượt quá giới hạn
+     * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
     */
-    if ((TOTAL_POINT > 0 && current_point > TOTAL_POINT) || current_fee > MAX_FEE) {
+    if ((TOTAL_POINT > 0 && current_point >= TOTAL_POINT) || current_fee >= MAX_FEE) {
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
-        if (balance_in_eth > MIN_BALANCE) {
+        if (balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) {
           const currentTime = new Date();
           currentTime.setHours(currentTime.getHours() + 7);
           const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
           console.log(
-            `\n==> [${shortDate}] ${account.address} - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points\n`
+            `\n==> [${shortDate}] ${shortAddress(account.address)} - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points\n`
           );
 
           const [hours, minutes, _] = logElapsedTime(start);
@@ -221,10 +233,72 @@ const processWallet = async (account) => {
   await startTransactions(SM_USE, chainID, account);
 };
 
+async function runProcess(ACCOUNTS) {
+  for (let i = 0; i < ACCOUNTS.length; i++) {
+    const currentAccount = ACCOUNTS[i];
+    const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
+
+    await processWallet(currentAccount);
+
+    await new Promise(resolve => setTimeout(resolve, WAIT_60S/2));
+
+    /** Send fund to next wallet 
+     * 1. aoumnt_to_send = 99,7% balance
+     * 2. Kiểm tra tính đúng đắn
+     * 2.1 Giao dịch có transactionHash, fee
+     * 2.2 Balance của nextAccount >= amount_to_send
+     */
+    const balance = await handleError(web3.eth.getBalance(currentAccount.address));
+    while (true) {
+      let currentBalance = await handleError(web3.eth.getBalance(currentAccount.address));
+      let nextBalance = await handleError(web3.eth.getBalance(nextAccount.address));
+
+      let fee;
+
+      // amount_to_send = 99,7% balance
+      let wei_to_send = ((balance * 597n) / 1000n);
+      let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
+
+      // Stop if done before
+      if (currentBalance < balance - wei_to_send && nextBalance >= wei_to_send) {
+        console.log(`Send fund successfully`);
+        break;
+      }
+
+      if (ACCOUNTS.length > 1) { // not run if done before
+        console.log(`Sending ${amount_in_eth.toPrecision(3)} to the next wallet: ${nextAccount.address}`);
+        try {
+          const receipt = await sendFunds(currentAccount, nextAccount.address, amount_in_eth);
+          console.log(`Transaction hash: ${receipt.transactionHash}`);
+          fee = await checkFinality(receipt);
+          // check until balance of WETH >= amount_in_wei
+          async () => {
+            while (currentBalance < balance - wei_to_send && nextBalance >= wei_to_send) {
+              await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 30));
+              currentBalance = await web3.eth.getBalance(currentAccount.address);
+              nextBalance = await web3.eth.getBalance(nextAccount.address);
+            }
+          }
+
+          if (receipt) {
+            console.log(`Send successfully. Fee: ${fee}`);
+            break;
+          }
+        } catch (error) {
+          console.error("An error occurred while sending funds:", error);
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
+    }
+
+    console.log(`Waiting ${WAIT_60S / 1000}s before processing the next wallet...`);
+    await new Promise(resolve => setTimeout(resolve, WAIT_60S/2));
+  }
+  console.log("All wallets processed.");
+};
+
 async function main() {
-
-  const WAIT_TIME = 60000;
-
   if (PRIVATE_KEYS.length === 0) {
     console.error("No private keys provided. Please set the environment variables.");
     process.exit(1); // Dừng chương trình nếu không có private key nào hợp lệ
@@ -247,45 +321,6 @@ async function main() {
   console.log("o RPC:", RPC_URL);
   console.log("o POINT: ", TOTAL_POINT, "- MAX FEE: ", MAX_FEE);
 
-  const runProcess = async () => {
-    for (let i = 0; i < ACCOUNTS.length; i++) {
-      const currentAccount = ACCOUNTS[i];
-      const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
-
-      await processWallet(currentAccount);
-
-      const balance = await handleError(web3.eth.getBalance(currentAccount.address));
-      // amount_to_send = 99,7% balance
-      let amount_to_send = web3.utils.fromWei(((balance * 998n) / 1000n).toString(), 'ether');
-      if (ACCOUNTS.length > 1) {
-        console.log(`Sending ${amount_to_send} to the next wallet: ${nextAccount.address}`);
-
-        let balance = await web3.eth.getBalance(currentAccount.address);
-        const minEthBalance = BigInt(web3.utils.toWei('0.01', 'ether'));
-        let attempts = 0, maxAttempts = 5;
-        while (balance > minEthBalance && attempts < maxAttempts) {
-          try {
-            const receipt = await sendFunds(currentAccount, nextAccount.address, amount_to_send);
-            balance = await web3.eth.getBalance(currentAccount.address);
-            const fee = checkFinality(receipt);
-            if (fee !== 0n || fee !== undefined) {
-              console.log(`Funds sent from ${currentAccount.address} to ${nextAccount.address}: ${amount_to_send} ETH`);
-              break;
-            }
-            attempts++;
-          } catch (error) {
-            console.error("Error sending funds:", error);
-          }
-        }
-      }
-
-      console.log(`Waiting ${WAIT_TIME / 1000}s before processing the next wallet...`);
-      await new Promise(resolve => setTimeout(resolve, WAIT_TIME));
-    }
-
-    console.log("All wallets processed.");
-  };
-
   const autoRun = async () => {
     console.log("\nQuá thời gian chờ. Tự động chạy tool...");
     rl.close();
@@ -293,7 +328,7 @@ async function main() {
   };
 
   // Đặt timeout
-  const timer = setTimeout(autoRun, WAIT_TIME);
+  const timer = setTimeout(autoRun, WAIT_60S);
 
   // Chờ xác nhận từ người dùng
   rl.question("\nConfirm to continue? (Y/n): ", async (answer) => {
@@ -301,7 +336,7 @@ async function main() {
     const userInput = answer.trim().toLowerCase();
     if (userInput === "y" || userInput === "") {
       console.log("Let's GOOOOOOO");
-      await runProcess();
+      await runProcess(ACCOUNTS);
     } else {
       console.log("Stopped.");
       rl.close();
