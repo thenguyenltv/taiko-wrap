@@ -256,7 +256,7 @@ async function runProcess(ACCOUNTS) {
       let fee;
 
       // amount_to_send = 99,7% balance
-      let wei_to_send = ((balance * 597n) / 1000n);
+      let wei_to_send = balance - 500000n; // decrease 0.0005 ETH
       let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
 
       // Stop if done before
