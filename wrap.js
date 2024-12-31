@@ -324,7 +324,7 @@ async function main() {
   const autoRun = async () => {
     console.log("\nQuá thời gian chờ. Tự động chạy tool...");
     rl.close();
-    await runProcess();
+    await runProcess(ACCOUNTS);
   };
 
   // Đặt timeout
