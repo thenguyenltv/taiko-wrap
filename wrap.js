@@ -200,15 +200,15 @@ async function startTransactions(SM_USE, chainID, account) {
       }
       else { /** Xu ly lenh fail --> goi ham cancelTransaction */
         failed_tnx_count++;
-        console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 3, the transaction will be canceled");
+        console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 5, the transaction will be canceled");
         if (failed_tnx_count > 5) {
 
           // check isTnxWithdraw again
-          let tmpIsWithdraw = await checkBalanceAndSetWithdraw();
+          let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
           if (tmpIsWithdraw !== isTnxWithdraw) {
             // check in 1 minute
             await new Promise((resolve) => setTimeout(resolve, wait_10s * 6));
-            tmpIsWithdraw = await checkBalanceAndSetWithdraw();
+            tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
             isTnxWithdraw = tmpIsWithdraw;
           }
 
@@ -247,7 +247,11 @@ async function runProcess(ACCOUNTS) {
   for (let i = 0; i < ACCOUNTS.length; i++) {
     const currentAccount = ACCOUNTS[i];
     const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
-
+    
+    // check account first
+    const ether = convertWeiToNumber(await handleError(web3.eth.getBalance(currentAccount.address)));
+    const wrap_ether = convertWeiToNumber(await handleError(SM_USE.methods.balanceOf(currentAccount.address).call()));
+    console.log("Current Account:", shortAddress(currentAccount.address), "- Balance:", ether, "- WETH:", wrap_ether);
     await processWallet(currentAccount);
 
     await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));

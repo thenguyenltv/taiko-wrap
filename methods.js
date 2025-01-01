@@ -165,7 +165,7 @@ async function getLowGasPrice(lastestGas = 200000002n, pollingInterval = 700, ma
     }
 }
 
-async function checkBalanceAndSetWithdraw() {
+async function checkBalanceAndSetWithdraw(account) {
     const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
     return balance_in_eth > MIN_BALANCE ? 0 : 1;
   }
