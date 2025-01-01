@@ -95,6 +95,34 @@ async function startTransactions(SM_USE, chainID, account) {
 
   while (true) {
 
+    /** Stop Condition 
+         * 1. Đạt được số điểm tối đa
+         * Or Phí giao dịch vượt quá giới hạn
+         * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
+        */
+    if ((TOTAL_POINT > 0 && current_point >= TOTAL_POINT) || current_fee >= MAX_FEE) {
+      const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
+      try {
+        if ((balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) || tnx_count === 0) {
+          const currentTime = new Date();
+          currentTime.setHours(currentTime.getHours() + 7);
+          const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
+          console.log(
+            `\n==> [${shortDate}] ${shortAddress(account.address)} - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points\n`
+          );
+
+          const [hours, minutes, _] = logElapsedTime(start);
+          logMessage(
+            `${shortAddress(account.address)} - ${tnx_count} txs - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h${minutes}m`
+          );
+
+          return;
+        }
+      } catch (error) {
+        console.error('An error occurred:', error);
+      }
+    }
+
     /* Try sending transaction */
     let status = false, fee = 0n, amount = 0
     let gasPrice = await getLowGasPrice(CEIL_GAS);
@@ -197,34 +225,6 @@ async function startTransactions(SM_USE, chainID, account) {
     console.log(
       `--> Time elapsed: ${hours}h${minutes}m${seconds}s\n`
     );
-
-    /** Stop Condition 
-     * 1. Đạt được số điểm tối đa
-     * Or Phí giao dịch vượt quá giới hạn
-     * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
-    */
-    if ((TOTAL_POINT > 0 && current_point >= TOTAL_POINT) || current_fee >= MAX_FEE) {
-      const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
-      try {
-        if (balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) {
-          const currentTime = new Date();
-          currentTime.setHours(currentTime.getHours() + 7);
-          const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
-          console.log(
-            `\n==> [${shortDate}] ${shortAddress(account.address)} - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points\n`
-          );
-
-          const [hours, minutes, _] = logElapsedTime(start);
-          logMessage(
-            `${shortAddress(account.address)} - ${tnx_count} txs - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h${minutes}m`
-          );
-
-          return;
-        }
-      } catch (error) {
-        console.error('An error occurred:', error);
-      }
-    }
   }
 }
 
@@ -240,7 +240,7 @@ async function runProcess(ACCOUNTS) {
 
     await processWallet(currentAccount);
 
-    await new Promise(resolve => setTimeout(resolve, WAIT_60S/2));
+    await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
     /** Send fund to next wallet 
      * 1. aoumnt_to_send = 99,7% balance
@@ -256,7 +256,8 @@ async function runProcess(ACCOUNTS) {
       let fee;
 
       // amount_to_send = 99,7% balance
-      let wei_to_send = balance - 500000n; // decrease 0.0005 ETH
+      let wei_to_send = balance - 500000000000000n; // decrease 0.0005 ETH
+      console.log("Balance", convertWeiToNumber(balance), "- amou to send:", convertWeiToNumber(wei_to_send));
       let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
 
       // Stop if done before
@@ -285,7 +286,7 @@ async function runProcess(ACCOUNTS) {
             break;
           }
         } catch (error) {
-          console.error("An error occurred while sending funds:", error);
+          console.error("An error occurred while sending funds");
         }
       }
 
@@ -293,7 +294,7 @@ async function runProcess(ACCOUNTS) {
     }
 
     console.log(`Waiting ${WAIT_60S / 1000}s before processing the next wallet...`);
-    await new Promise(resolve => setTimeout(resolve, WAIT_60S/2));
+    await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
   }
   console.log("All wallets processed.");
 };

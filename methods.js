@@ -199,7 +199,7 @@ async function cancelTransaction(latestGasPrice, account) {
     }
 }
 
-const sendFunds = async (fromAccount, toAddress, amount) => {
+async function sendFunds(fromAccount, toAddress, amount) {
     try {
         const gas_price = await getLowGasPrice(200000002n);
         const tx = {
@@ -213,9 +213,9 @@ const sendFunds = async (fromAccount, toAddress, amount) => {
         const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
         return receipt;
     } catch (error) {
-        console.error(`Error sending funds from ${fromAccount.address} to ${toAddress}:`, error);
+        console.error(`Error sending funds from ${fromAccount.address} to ${toAddress}:`, error.message);
     }
-};
+}
 
 /**
  * Function to deposit funds to the wrapped token contract
@@ -277,7 +277,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, tnxGasPrice) {
             }
 
             if (balance < BigInt(amount_in_wei)) {
-                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH`);
+                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH, need at least ${amount_in_eth} ETH`);
             }
         }
 
@@ -360,7 +360,7 @@ async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
             }
 
             if (balance < amount) {
-                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balance)} WETH`);
+                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balance)} WETH, need at least ${convertWeiToNumber(amount)} WETH`);
             }
         }
 
@@ -410,7 +410,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             const balance = await web3.eth.getBalance(account.address);
             let amount_in_wei = balance - (BigInt(min_eth) / 2n);
             if (amount_in_wei < min_eth) {
-                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH`);
+                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH, need at least ${convertWeiToNumber(min_eth)} ETH`);
             }
 
             if (chainID == 167009) {
@@ -445,7 +445,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (balanceOf / BigInt(500));
             if (weth_in_wei < min_eth) {
-                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balanceOf)} WETH`);
+                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balanceOf)} WETH, need at least ${convertWeiToNumber(min_eth)} WETH`);
             }
 
             if (chainID == 167009) {
