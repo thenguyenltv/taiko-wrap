@@ -42,10 +42,11 @@ const { Web3 } = require('web3');
 const readline = require('readline');
 
 const {
-  cancelTransaction,
-  sendFunds,
   getLowGasPrice,
   checkFinality,
+  checkBalanceAndSetWithdraw,
+  sendFunds,
+  cancelTransaction,
   DepositOrWithdraw,
 } = require('./methods');
 
@@ -127,7 +128,7 @@ async function startTransactions(SM_USE, chainID, account) {
     let status = false, fee = 0n, amount = 0
     let gasPrice = await getLowGasPrice(CEIL_GAS);
     try {
-      console.log(`Start wrap/unwrap of ${shortAddress(account.address)}`)
+      console.log(`~~~~~~~~~~~~~~Start wrap/unwrap of ${shortAddress(account.address)}`)
       const balance = await handleError(web3.eth.getBalance(account.address));
       const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (MIN_BALANCE / 2);
       if (isTnxWithdraw === -1) {
@@ -143,7 +144,7 @@ async function startTransactions(SM_USE, chainID, account) {
         gasPrice = 200000002n;
       }
       duraGasPrice = gasPrice < min_gwei ? min_gwei : gasPrice;
-      console.log("Gas Price:", web3.utils.fromWei(duraGasPrice.toString(), 'gwei'), "Gwei");
+      console.log("~~~~~~~~~~~~~~Gas Price:", web3.utils.fromWei(duraGasPrice.toString(), 'gwei'), "Gwei");
 
       // ================== DepositOrWithdraw ==================
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(isTnxWithdraw, SM_USE, chainID, tnx_count, account, duraGasPrice);
@@ -159,7 +160,6 @@ async function startTransactions(SM_USE, chainID, account) {
 
     } catch (error) {
       eth_price = 3000; // Fallback price if fetching fails
-      // await new Promise((resolve) => setTimeout(resolve, wait_10s / 2));
     }
 
     if (status) {
@@ -176,7 +176,7 @@ async function startTransactions(SM_USE, chainID, account) {
       await new Promise((resolve) => setTimeout(resolve, wait_10s));
     }
     else {
-      /** Xu ly lenh fail --> goi ham cancelTransaction */
+
       await new Promise((resolve) => setTimeout(resolve, wait_10s));
       // check nonce if the transaction is still mine in wait_10s and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
@@ -185,6 +185,7 @@ async function startTransactions(SM_USE, chainID, account) {
         // Cong 1 cho tnx_count
         try {
           tnx_count++;
+          isTnxWithdraw = 1 - isTnxWithdraw;
           current_point += Math.floor(1.5 * eth_price * amount);
           if (typeof fee === 'bigint') {
             current_fee += convertWeiToNumber(fee, 18, 8);
@@ -196,12 +197,21 @@ async function startTransactions(SM_USE, chainID, account) {
         } catch (error) {
           console.error("Fee or point may not increase");
         }
-        // await new Promise((resolve) => setTimeout(resolve, wait_10s));
       }
-      else {
+      else { /** Xu ly lenh fail --> goi ham cancelTransaction */
         failed_tnx_count++;
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 3, the transaction will be canceled");
-        if (failed_tnx_count >= 2) {
+        if (failed_tnx_count > 5) {
+
+          // check isTnxWithdraw again
+          let tmpIsWithdraw = await checkBalanceAndSetWithdraw();
+          if (tmpIsWithdraw !== isTnxWithdraw) {
+            // check in 1 minute
+            await new Promise((resolve) => setTimeout(resolve, wait_10s * 6));
+            tmpIsWithdraw = await checkBalanceAndSetWithdraw();
+            isTnxWithdraw = tmpIsWithdraw;
+          }
+
           /** Send `Cancel Transaction` */
           const latestGasPrice = await handleError(web3.eth.getGasPrice());
           const receipt = await handleError(cancelTransaction(latestGasPrice, account));
@@ -249,24 +259,25 @@ async function runProcess(ACCOUNTS) {
      * 2.2 Balance của nextAccount >= amount_to_send
      */
     const balance = await handleError(web3.eth.getBalance(currentAccount.address));
-    while (true) {
-      let currentBalance = await handleError(web3.eth.getBalance(currentAccount.address));
-      let nextBalance = await handleError(web3.eth.getBalance(nextAccount.address));
+    if (ACCOUNTS.length > 1) {
+      while (true) {
+        let currentBalance = await handleError(web3.eth.getBalance(currentAccount.address));
+        let nextBalance = await handleError(web3.eth.getBalance(nextAccount.address));
 
-      let fee;
+        let fee;
 
-      // amount_to_send = 99,7% balance
-      let wei_to_send = balance - 500000000000000n; // decrease 0.0005 ETH
-      console.log("Balance", convertWeiToNumber(balance), "- amou to send:", convertWeiToNumber(wei_to_send));
-      let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
+        // amount_to_send = 99,7% balance
+        let wei_to_send = balance - 500000000000000n; // decrease 0.0005 ETH
+        console.log("Balance", convertWeiToNumber(balance), "- amou to send:", convertWeiToNumber(wei_to_send));
+        let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
 
-      // Stop if done before
-      if (currentBalance < balance - wei_to_send && nextBalance >= wei_to_send) {
-        console.log(`Send fund successfully`);
-        break;
-      }
+        // Stop if done before
+        if (currentBalance < balance - wei_to_send && nextBalance >= wei_to_send) {
+          console.log(`Send fund successfully`);
+          break;
+        }
 
-      if (ACCOUNTS.length > 1) { // not run if done before
+        // not run if done before
         console.log(`Sending ${amount_in_eth.toPrecision(3)} to the next wallet: ${nextAccount.address}`);
         try {
           const receipt = await sendFunds(currentAccount, nextAccount.address, amount_in_eth);
@@ -283,18 +294,15 @@ async function runProcess(ACCOUNTS) {
 
           if (receipt) {
             console.log(`Send successfully. Fee: ${fee}`);
+            console.log(`Waiting ${WAIT_60S / 2000}s before processing the next wallet...`);
+            await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
             break;
           }
         } catch (error) {
           console.error("An error occurred while sending funds");
         }
       }
-
-      await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
     }
-
-    console.log(`Waiting ${WAIT_60S / 1000}s before processing the next wallet...`);
-    await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
   }
   console.log("All wallets processed.");
 };

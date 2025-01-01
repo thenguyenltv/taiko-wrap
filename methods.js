@@ -165,6 +165,11 @@ async function getLowGasPrice(lastestGas = 200000002n, pollingInterval = 700, ma
     }
 }
 
+async function checkBalanceAndSetWithdraw() {
+    const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
+    return balance_in_eth > MIN_BALANCE ? 0 : 1;
+  }
+
 /**
  * Cancel transaction function
  * To cancel a transaction: replacing the transaction with another 0 ETH transaction 
@@ -494,9 +499,10 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
 }
 
 module.exports = {
+    checkFinality,
+    checkBalanceAndSetWithdraw,
     cancelTransaction,
     sendFunds,
-    checkFinality,
     deposit,
     withdraw,
     DepositOrWithdraw,
