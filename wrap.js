@@ -14,14 +14,13 @@ const PRIVATE_KEYS = [
   process.env.KEY10,
 ].filter(Boolean); // Danh sách các private keys
 
-
 let RPC_URL = process.env.RPC_URL;
 RPC_URL = RPC_URL == undefined ? "https://rpc.hekla.taiko.xyz" : RPC_URL;
 const SUB_RPC1 = process.env.SUB_RPC1;
 const SUB_RPC2 = process.env.SUB_RPC2;
 const ListRPC = [RPC_URL];
-let TOTAL_POINT = Number(process.argv[2]);
-const MAX_FEE = Number(process.argv[3]);
+let MAX_POINT = Number(process.argv[2]);
+let MAX_FEE = Number(process.argv[3]);
 const MIN_GAS = Number(process.argv[4]);
 
 const {
@@ -48,10 +47,14 @@ const {
   sendFunds,
   cancelTransaction,
   DepositOrWithdraw,
+  tnxType2,
+  ProcessTotalGas,
 } = require('./methods');
 
 const {
   MIN_BALANCE,
+  CONTRACT_VOTE,
+  ABI_VOTE,
   SM_ADDRESS,
   SM_ABI,
   TEST_SM_WETH,
@@ -74,11 +77,18 @@ const WAIT_60S = 60000;
 const min_gwei = (MIN_GAS !== undefined && !isNaN(MIN_GAS)) ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
 console.log("Min Gas Price:", web3.utils.fromWei(min_gwei.toString(), 'gwei'), "Gwei");
 
+// Vote constance
+const MULTI_POINT = 2.12;
+const SM_VOTE = new web3.eth.Contract(ABI_VOTE, CONTRACT_VOTE);
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
 
+/**
+ * @returns The result of process: [current_point, current_fee]
+ */
 async function startTransactions(SM_USE, chainID, account) {
 
   let duraGasPrice = await handleError(web3.eth.getGasPrice());
@@ -87,7 +97,6 @@ async function startTransactions(SM_USE, chainID, account) {
   let current_point = 1, current_fee = 0;
   let tnx_count = 0, failed_tnx_count = 0;
   let wait_10s = 10000; // unit (ms), 1000ms = 1s
-  let start = new Date().getTime();
   let eth_price = 0;
 
   let isTnxWithdraw = -1; // 0: Deposit, 1: Withdraw
@@ -101,23 +110,12 @@ async function startTransactions(SM_USE, chainID, account) {
          * Or Phí giao dịch vượt quá giới hạn
          * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
         */
-    if ((TOTAL_POINT > 0 && current_point >= TOTAL_POINT) || current_fee >= MAX_FEE) {
+    if ((MAX_POINT > 0 && current_point >= MAX_POINT) || current_fee >= MAX_FEE) {
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
         if ((balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) || tnx_count === 0) {
-          const currentTime = new Date();
-          currentTime.setHours(currentTime.getHours() + 7);
-          const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
-          console.log(
-            `\n==> [${shortDate}] ${shortAddress(account.address)} - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points\n`
-          );
-
-          const [hours, minutes, _] = logElapsedTime(start);
-          logMessage(
-            `${shortAddress(account.address)} - ${tnx_count} txs - ${Number(current_fee.toPrecision(3))} fee - ${current_point} Points - ${hours}h${minutes}m`
-          );
-
-          return;
+          console.log("Stop Wrap/Unwrap because of reaching the limit");
+          return [current_point, current_fee];
         }
       } catch (error) {
         console.error('An error occurred:', error);
@@ -238,23 +236,166 @@ async function startTransactions(SM_USE, chainID, account) {
   }
 }
 
+/**
+ * This function is used to send 1 transaction to the voting contract
+ * Just send, not waiting for the result
+ */
+async function InitializeVoting(NONCE, gasPrice, gasIncrease) {
+  try {
+    const encodedData = SM_VOTE.methods.vote().encodeABI();
+    const estimatedGas = await web3.eth.estimateGas({
+      to: CONTRACT_VOTE,
+      data: encodedData,
+    });
+    const gas_Limit = web3.utils.toHex(estimatedGas) * 2;
+    const max_Priority_Fee_Per_Gas = gasPrice * BigInt(100 + gasIncrease) / BigInt(100);
+    const max_Fee_Per_Gas = web3.utils.toWei('0.25', 'gwei');
+
+    /** EIP-1559 (Type 2 transaction) */
+    const tx = {
+      nonce: NONCE,
+      to: CONTRACT_VOTE,
+      data: encodedData,
+      value: '0x00',
+      maxPriorityFeePerGas: max_Priority_Fee_Per_Gas,
+      maxFeePerGas: max_Fee_Per_Gas,
+      gasLimit: gas_Limit,
+      type: '0x2', // Specify EIP-1559 transaction type
+    };
+
+
+    const fee = web3.utils.fromWei((max_Priority_Fee_Per_Gas * BigInt(estimatedGas)).toString(), 'ether');
+    return [tx, fee];
+  }
+  catch (error) {
+    console.error('Error sending vote:', error.message);
+    return [null, null];
+  }
+}
+
+async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
+
+  // gwei / 10 * 2 = total_point
+  // ==> gwei = total_point / 2 * 10
+  // Do do, total_gas = gwei --> ether
+  const TOTAL_GAS_In_Wei = web3.utils.toWei((Math.ceil(parseInt(TOTAL_POINT) / MULTI_POINT * 10)).toString(), 'Gwei');
+  const total_gas = TOTAL_GAS_In_Wei === '0' ? TOTAL_GAS : web3.utils.fromWei(TOTAL_GAS_In_Wei, 'ether');
+  console.log(`\nTotal Point: ${parseInt(TOTAL_POINT)}`);
+  console.log("Total gas:",  convertWeiToNumber(total_gas, 0, 6), "ETH");
+  
+  let TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT;
+
+  let NONCE = await handleError(web3.eth.getTransactionCount(account.address));
+  if(NONCE == null || NONCE == undefined){
+      console.log("Fetching error");
+      return;
+  }
+  let startNonceRound = NONCE;
+  
+  let txCount = 0, remainingGas, gas_consumed = 0, Gas_Price;
+  while (gas_consumed < Number(total_gas)) {
+      Gas_Price = await handleError(web3.eth.getGasPrice());
+      remainingGas = Number(total_gas) - gas_consumed;
+      [TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT] = ProcessTotalGas(remainingGas, Gas_Price);
+
+      console.log('\x1b[34m%s\x1b[0m', `\nSending ${TNX_PER_BATCH} transactions with NONCE start ${NONCE}...`);
+      // await new Promise(resolve => setTimeout(resolve, 1500));
+
+      [tx, fee] = await InitializeVoting(NONCE, Gas_Price, GAS_FEE_INCREASE_PERCENT);
+      if (tx == null || fee == null) {
+          await new Promise(resolve => setTimeout(resolve, WAIT_60S/6));
+          continue;
+      }
+      
+      for (let i = 0; i < TNX_PER_BATCH; i++) {
+          try {
+              tnxType2(account, tx);
+              console.log(`Fee: ${convertWeiToNumber(fee, 0, 8)} ETH`);
+              gas_consumed += parseFloat(fee);
+              NONCE += BigInt(1);
+              tx.nonce = NONCE;
+              await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (error) {
+              console.error('Sending Tnx Error:', error.message);
+          }
+      }   
+
+      let nonce;
+      for (let j = 0; j < 60; j++) {
+          nonce = await handleError(web3.eth.getTransactionCount(account.address));
+          if (nonce >= startNonceRound + BigInt(TNX_PER_BATCH)) {
+              console.log(`--> Done ${nonce - startNonceRound} transactions!!!`);
+              console.log("--> Gas consumed:", convertWeiToNumber(gas_consumed, 0, 6), "ETH");
+              break;
+          }
+          await new Promise(resolve => setTimeout(resolve, WAIT_60S/10));
+      }
+
+      txCount += Number(nonce - startNonceRound);
+      NONCE = startNonceRound = nonce;
+
+  }
+}
+
 const processWallet = async (account) => {
+  let start = new Date().getTime();
+
   console.log(`\nProcessing wallet: ${account.address}`);
-  await startTransactions(SM_USE, chainID, account);
+  let [points, fee] = await startTransactions(SM_USE, chainID, account);
+  await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
+
+  const target_fee = 0.00000355; //in ETH
+  if (fee < target_fee) {
+    if (points >= MAX_POINT) {
+      // call method `vote`
+      console.log("\nStart voting to fill the fee!!!");
+      const remainingGas = target_fee - fee;
+      await SendTnx(0, remainingGas, account);
+      fee += remainingGas;
+    }
+    else {
+      MAX_FEE = target_fee - fee;
+      console.log("Change MAX_FEE to", MAX_FEE);
+      // call startTransactions again
+      let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
+      fee += add_fee;
+      points += add_points;
+    }
+  }
+
+  // const target_point = 75000;
+  // if (points < target_point) {
+  //   MAX_POINT = target_point - points;
+  //   console.log("Change MAX_POINT to", MAX_POINT);
+  //   // call startTransactions again
+  //   let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
+  //   points += add_points;
+  // }
+
+  const currentTime = new Date();
+  currentTime.setHours(currentTime.getHours() + 7);
+  const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
+  console.log(
+    `\n==> [${shortDate}] ${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points\n`
+  );
+
+  const [hours, minutes, _] = logElapsedTime(start);
+  logMessage(
+    `${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points - ${hours}h${minutes}m`
+  );
 };
 
 async function runProcess(ACCOUNTS) {
   for (let i = 0; i < ACCOUNTS.length; i++) {
     const currentAccount = ACCOUNTS[i];
     const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
-    
+
     // check account first
     const ether = convertWeiToNumber(await handleError(web3.eth.getBalance(currentAccount.address)));
     const wrap_ether = convertWeiToNumber(await handleError(SM_USE.methods.balanceOf(currentAccount.address).call()));
     console.log("Current Account:", shortAddress(currentAccount.address), "- Balance:", ether, "- WETH:", wrap_ether);
-    await processWallet(currentAccount);
 
-    await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
+    await processWallet(currentAccount);
 
     /** Send fund to next wallet 
      * 1. aoumnt_to_send = 99,7% balance
@@ -332,7 +473,7 @@ async function main() {
   console.log("o Run on", chainID);
   console.log("o SM:", SM_USE._address);
   console.log("o RPC:", RPC_URL);
-  console.log("o POINT: ", TOTAL_POINT, "- MAX FEE: ", MAX_FEE);
+  console.log("o POINT: ", MAX_POINT, "- MAX FEE: ", MAX_FEE);
 
   const autoRun = async () => {
     console.log("\nQuá thời gian chờ. Tự động chạy tool...");
