@@ -97,6 +97,7 @@ async function startTransactions(SM_USE, chainID, account) {
   let current_point = 1, current_fee = 0;
   let tnx_count = 0, failed_tnx_count = 0;
   let wait_10s = 10000; // unit (ms), 1000ms = 1s
+  let start = new Date().getTime();
   let eth_price = 0;
 
   let isTnxWithdraw = -1; // 0: Deposit, 1: Withdraw
