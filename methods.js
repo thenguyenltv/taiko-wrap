@@ -28,6 +28,8 @@ const {
 } = require('./constant');
 
 const wait_3s = 3000;
+const GAS_USAGE_FOR_VOTE = 21116;
+const MAX_GAS_FOR_1VOTE = 0.0000045;
 
 /**
  * Retrieves and calculates the transaction fee for a given transaction hash.
@@ -168,7 +170,7 @@ async function getLowGasPrice(lastestGas = 200000002n, pollingInterval = 700, ma
 async function checkBalanceAndSetWithdraw(account) {
     const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
     return balance_in_eth > MIN_BALANCE ? 0 : 1;
-  }
+}
 
 /**
  * Cancel transaction function
@@ -498,6 +500,87 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
     }
 }
 
+/**
+ * @param {web3.eth.accounts} account 
+ * @param {} tx 
+ * @returns 
+ */
+async function tnxType2(account, tx) {
+    try {
+        // check info: nonce, gasPrice, gasLimit, to, data
+        // Required fields
+        const requiredFields = ['nonce', 'to', 'data'];
+
+        // Check if all required fields are present
+        requiredFields.forEach(field => {
+            if (!tx.hasOwnProperty(field)) {
+                throw new Error(`Transaction is missing required field: ${field}`);
+            }
+        });
+
+        // Get default values
+        if (tx.nonce === undefined) {
+            tx.nonce = await web3.eth.getTransactionCount(account.address);
+            console.log("Nonce unf:", tx.nonce);
+        }
+
+        if (tx.maxFeePerGas === undefined) {
+            const baseFee = await web3.eth.getBlock('latest').then(block => block.baseFeePerGas);
+            const maxFeePerGas = web3.utils.toHex(BigInt(baseFee) + BigInt(maxPriorityFeePerGas));
+            console.log("Max Fee Per Gas unf:", maxFeePerGas);
+        }
+
+        if (tx.maxPriorityFeePerGas === undefined) {
+            maxPriorityFeePerGas = web3.utils.toWei('1', 'gwei');
+            console.log("Max Priority Fee Per Gas unf:", maxPriorityFeePerGas);
+        }
+
+        if (tx.gasLimit === undefined) {
+            tx.gasLimit = await web3.eth.estimateGas(tx) * BigInt(2);
+            console.log("Gas Limit unf:", tx.gasLimit);
+        }
+
+        if (tx.value === undefined) {
+            tx.value = '0x00';
+        }
+
+        const signed = await account.signTransaction(tx);
+        const receipt = await web3.eth.sendSignedTransaction(signed.rawTransaction);
+        return receipt;
+    } catch (error) {
+        console.error('Error creating and sending transaction:', error.message);
+    }
+}
+
+/**
+ * Return TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT
+ * @param {number} Total_Gas - Total gas amount in ETH
+ * @param {BigInt} Gas_Price - Current gas price (e.g., 125000001n)
+ */
+function ProcessTotalGas(Total_Gas, Gas_Price) {
+    let avg_gas_per_tnx = parseFloat(web3.utils.fromWei((Gas_Price * BigInt(GAS_USAGE_FOR_VOTE)).toString(), 'ether'));
+    
+    if(avg_gas_per_tnx > 0.0000045){
+        console.log("Gas price is so high, wait and try again!");
+        return [null, null]
+    }
+    
+    // Tinh phan tram tang gas fee
+    const GAS_FEE_INCREASE_PERCENT = Math.max(0, Math.round((MAX_GAS_FOR_1VOTE - Number(avg_gas_per_tnx)) / Number(avg_gas_per_tnx) * 100));
+    
+    // Tinh so luong transaction moi batch
+    let TNX_PER_BATCH = Math.floor(Math.random() * (3)) + 13;
+    // Tinh so luong transaction con lai
+    avg_gas_per_tnx = avg_gas_per_tnx * (GAS_FEE_INCREASE_PERCENT/100) + avg_gas_per_tnx;
+    let num_tnx = Math.ceil(Total_Gas / avg_gas_per_tnx);
+    // Dieu chinh so luong transaction moi batch
+    if (num_tnx < TNX_PER_BATCH) {
+        TNX_PER_BATCH = num_tnx;
+    }
+
+    return [TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT];
+}
+
 module.exports = {
     checkFinality,
     checkBalanceAndSetWithdraw,
@@ -507,5 +590,7 @@ module.exports = {
     withdraw,
     DepositOrWithdraw,
     getTransactionFee,
-    getLowGasPrice
+    getLowGasPrice,
+    tnxType2,
+    ProcessTotalGas
 };
