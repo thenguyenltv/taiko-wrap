@@ -62,7 +62,6 @@ const {
   Mainnet,
   Testnet
 } = require('./constant');
-const { type } = require('os');
 
 let web3 = new Web3(new Web3.providers.HttpProvider(RPC_URL));
 
@@ -345,8 +344,8 @@ const processWallet = async (account) => {
   let [points, fee] = await startTransactions(SM_USE, chainID, account);
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
-  const target_fee = 0.00000355; //in ETH
-  if (fee < target_fee) {
+  const target_fee = 0.000355; //in ETH
+  if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee = MAX_FEE
     if (points >= MAX_POINT) {
       // call method `vote`
       console.log("\nStart voting to fill the fee!!!");
@@ -364,14 +363,14 @@ const processWallet = async (account) => {
     }
   }
 
-  // const target_point = 75000;
-  // if (points < target_point) {
-  //   MAX_POINT = target_point - points;
-  //   console.log("Change MAX_POINT to", MAX_POINT);
-  //   // call startTransactions again
-  //   let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
-  //   points += add_points;
-  // }
+  const target_point = 75000;
+  if (target_point <= MAX_POINT && points < target_point) { // Thuc chat points = MAX_POINT
+    MAX_POINT = target_point - points;
+    console.log("Change MAX_POINT to", MAX_POINT);
+    // call startTransactions again
+    let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
+    points += add_points;
+  }
 
   const currentTime = new Date();
   currentTime.setHours(currentTime.getHours() + 7);
@@ -439,7 +438,7 @@ async function runProcess(ACCOUNTS) {
           }
 
           if (receipt) {
-            console.log(`Send successfully. Fee: ${fee}`);
+            console.log("Send successfully. Fee:", convertWeiToNumber(fee, 18, 8));
             console.log(`Waiting ${WAIT_60S / 2000}s before processing the next wallet...`);
             await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
             break;
