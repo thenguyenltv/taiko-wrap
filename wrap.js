@@ -342,7 +342,7 @@ const processWallet = async (account) => {
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
   const target_point = 75000;
-  if (points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
+  if (MAX_POINT > 0 && points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
     MAX_POINT = target_point - points;
     console.log("Change MAX_POINT to", MAX_POINT);
     // call startTransactions again
