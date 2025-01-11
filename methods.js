@@ -77,7 +77,7 @@ async function checkFinality(receipt) {
                     return BigInt(fee);
                 }
             } else {
-                // Wait for 5 seconds before checking again
+                // Wait for 3 seconds before checking again
                 await new Promise((resolve) => setTimeout(resolve, wait_3s));
             }
 
@@ -268,26 +268,6 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, tnxGasPrice) {
             chainID: chainID
         };
 
-        async () => {
-            let balance = await web3.eth.getBalance(account.address);
-            let attempts = 0;
-            const maxAttempts = 5;
-
-            while (balance < BigInt(amount_in_wei) && attempts < maxAttempts) {
-                // double check the balance
-                if (balance >= BigInt(amount_in_wei)) {
-                    break;
-                }
-                await new Promise((resolve) => setTimeout(resolve, wait_3s / 6));
-                balance = await web3.eth.getBalance(account.address);
-                attempts++;
-            }
-
-            if (balance < BigInt(amount_in_wei)) {
-                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH, need at least ${amount_in_eth} ETH`);
-            }
-        }
-
         // Sign and send the transaction
         const signedTx = await account.signTransaction(tx_params);
         // const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
@@ -297,7 +277,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, tnxGasPrice) {
         // Limit the receipt time 
         const receipt = await Promise.race([
             transactionPromise,
-            timeoutPromise(5 * 60 * wait_3s / 3),
+            timeoutPromise(3 * 60 * wait_3s / 3),
         ]);
 
         return [receipt, pre_gas, gas_price];
@@ -351,26 +331,6 @@ async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
             chainID: chainID
         };
 
-        async () => {
-            let balance = await SM_USE.methods.balanceOf(account.address).call();
-            let attempts = 0;
-            const maxAttempts = 5;
-
-            while (balance < amount && attempts < maxAttempts) {
-                // double check the balance
-                if (balance >= amount) {
-                    break;
-                }
-                await new Promise((resolve) => setTimeout(resolve, wait_3s / 6));
-                balance = await web3.eth.getBalance(account.address);
-                attempts++;
-            }
-
-            if (balance < amount) {
-                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balance)} WETH, need at least ${convertWeiToNumber(amount)} WETH`);
-            }
-        }
-
         // Send the transaction
         const signedTx = await account.signTransaction(tx_params);
         // const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
@@ -380,7 +340,7 @@ async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
         // Limit the receipt time to 5 minutes (300,000 milliseconds)
         const receipt = await Promise.race([
             transactionPromise,
-            timeoutPromise(5 * 60 * wait_3s / 3), // 5 minutes in milliseconds
+            timeoutPromise(3 * 60 * wait_3s / 3), // 5 minutes in milliseconds
         ]);
         return [receipt, pre_gas, gas_price];
 
@@ -406,7 +366,7 @@ async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
  *    - {number} amount - The amount of ETH involved in the transaction, represented as a number.
  */
 async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tnxGasPrice) {
-    const min_eth = BigInt(web3.utils.toWei(MIN_BALANCE.toString(), 'ether'));
+    const min_eth_in_wei = BigInt(web3.utils.toWei(MIN_BALANCE.toString(), 'ether'));
     let status = true;
     let fee = 0n;
     let receipt, pre_gas = 0n, amount = 0, gas_price = 200000002n;
@@ -414,10 +374,22 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
     try {
         // typeTnx=0 --> deposit
         if (typeTnx === 0) {
-            const balance = await web3.eth.getBalance(account.address);
-            let amount_in_wei = balance - (BigInt(min_eth) / 2n);
-            if (amount_in_wei < min_eth) {
-                throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH, need at least ${convertWeiToNumber(min_eth)} ETH`);
+            // update balance in seconds
+            let balance = await web3.eth.getBalance(account.address);
+            let amount_in_wei = balance - (BigInt(min_eth_in_wei) / 2n);
+            async () => {
+                let attempts = 0;
+                const maxAttempts = 5;
+
+                while (amount_in_wei < min_eth_in_wei && attempts < maxAttempts) {
+                    await new Promise((resolve) => setTimeout(resolve, wait_3s));
+                    balance = await web3.eth.getBalance(account.address);
+                    amount_in_wei = balance - (BigInt(min_eth_in_wei) / 2n);
+                    attempts++;
+                }
+                if (amount_in_wei < min_eth_in_wei) {
+                    throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH, need at least ${convertWeiToNumber(min_eth_in_wei)} ETH`);
+                }
             }
 
             if (chainID == 167009) {
@@ -429,30 +401,52 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             let amountInEther = web3.utils.fromWei(amount_in_wei.toString(), 'ether');
             amount = Number(amountInEther);
 
-            console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
             // ============================================
+            console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
             [receipt, pre_gas, gas_price] = await deposit(SM_USE, chainID, amountInEther, account, tnxGasPrice);
             // ============================================
 
-            // await new Promise((resolve) => setTimeout(resolve, wait_3s));
             fee = await checkFinality(receipt);
 
             // check until balance of WETH >= amount_in_wei
             async () => {
                 let newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
+                const start = new Date().getTime();
+                let end, time;
                 while (newBalanceOf < amount_in_wei) {
+                    await new Promise((resolve) => setTimeout(resolve, wait_3s / 2));
                     newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
-                    await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
+                    end = new Date().getTime();
+                    time = Math.round((end - start) / 1000);
+                    if (time % 30 == 0) {
+                        console.log("Check balacne exceed 30s, wait...");
+                    }
+
+                    if (time >= 120) {
+                        throw new Error(`Balance - Timeout exceeded while waiting for updated.`);
+                    }
                 }
             }
 
             return [status, fee, amount, gas_price];
         }
         else { // typeTnx=1 --> withdraw
-            const balanceOf = await SM_USE.methods.balanceOf(account.address).call();
+            // update balance in seconds
+            let balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (balanceOf / BigInt(500));
-            if (weth_in_wei < min_eth) {
-                throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balanceOf)} WETH, need at least ${convertWeiToNumber(min_eth)} WETH`);
+            async () => {
+                let attempts = 0;
+                const maxAttempts = 5;
+
+                while (weth_in_wei < min_eth_in_wei && attempts < maxAttempts) {
+                    await new Promise((resolve) => setTimeout(resolve, wait_3s));
+                    balanceOf = await SM_USE.methods.balanceOf(account.address).call();
+                    weth_in_wei = balanceOf - (balanceOf / BigInt(500));
+                    attempts++;
+                }
+                if (weth_in_wei < min_eth_in_wei) {
+                    throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balanceOf)} WETH, need at least ${convertWeiToNumber(min_eth_in_wei)} WETH`);
+                }
             }
 
             if (chainID == 167009) {
@@ -461,8 +455,8 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
                 await new Promise((resolve) => setTimeout(resolve, wait_3s * 3));
             }
 
-            console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(weth_in_wei), "WETH to ETH");
             // ============================================
+            console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(weth_in_wei), "WETH to ETH");
             [receipt, pre_gas, gas_price] = await withdraw(SM_USE, chainID, weth_in_wei, account, tnxGasPrice);
             // ============================================
 
@@ -471,9 +465,22 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             // check until balance of ETH >= weth_in_wei
             async () => {
                 let newBalance = await web3.eth.getBalance(account.address);
+                const start = new Date().getTime();
+                let end, time;
+
                 while (newBalance < weth_in_wei) {
-                    newBalance = await web3.eth.getBalance(account.address);
                     await new Promise((resolve) => setTimeout(resolve, wait_3s / 2));
+                    newBalance = await web3.eth.getBalance(account.address);
+                    end = new Date().getTime();
+                    time = Math.round((end - start) / 1000);
+                    if (time % 30 == 0) {
+                        console.log("Check balacne exceed 30s, wait...");
+                    }
+
+                    if (time >= 120) {
+                        throw new Error(`Balance - Timeout exceeded while waiting for updated.`);
+                    }
+
                 }
             }
 
@@ -487,12 +494,12 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             || err.message.includes("Transaction not found")) {
             status = false;
             fee = Number(pre_gas);
-            amount = amount === 0 ? 0.2 : amount;
+            amount = amount === 0 ? 0.1 : amount;
             await new Promise((resolve) => setTimeout(resolve, wait_3s * 3));
         }
         else {
             status = false;
-            pre_gas = pre_gas !== undefined ? Number(pre_gas) : 0;
+            pre_gas = (pre_gas === undefined || typeof pre_gas !== 'number') ? 0 : Number(pre_gas);
             fee = typeof pre_gas === 'number' ? pre_gas : 0n;
         }
 
@@ -559,19 +566,19 @@ async function tnxType2(account, tx) {
  */
 function ProcessTotalGas(Total_Gas, Gas_Price) {
     let avg_gas_per_tnx = parseFloat(web3.utils.fromWei((Gas_Price * BigInt(GAS_USAGE_FOR_VOTE)).toString(), 'ether'));
-    
-    if(avg_gas_per_tnx > 0.0000045){
+
+    if (avg_gas_per_tnx > 0.0000045) {
         console.log("Gas price is so high, wait and try again!");
         return [null, null]
     }
-    
+
     // Tinh phan tram tang gas fee
     const GAS_FEE_INCREASE_PERCENT = Math.max(0, Math.round((MAX_GAS_FOR_1VOTE - Number(avg_gas_per_tnx)) / Number(avg_gas_per_tnx) * 100));
-    
+
     // Tinh so luong transaction moi batch
     let TNX_PER_BATCH = Math.floor(Math.random() * (3)) + 13;
     // Tinh so luong transaction con lai
-    avg_gas_per_tnx = avg_gas_per_tnx * (GAS_FEE_INCREASE_PERCENT/100) + avg_gas_per_tnx;
+    avg_gas_per_tnx = avg_gas_per_tnx * (GAS_FEE_INCREASE_PERCENT / 100) + avg_gas_per_tnx;
     let num_tnx = Math.ceil(Total_Gas / avg_gas_per_tnx);
     // Dieu chinh so luong transaction moi batch
     if (num_tnx < TNX_PER_BATCH) {

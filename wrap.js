@@ -106,11 +106,10 @@ async function startTransactions(SM_USE, chainID, account) {
   while (true) {
 
     /** Stop Condition 
-         * 1. Đạt được số điểm tối đa
-         * Or Phí giao dịch vượt quá giới hạn
+         * 1. [Đạt được số điểm tối đa] AND [Phí giao dịch vượt quá giới hạn]
          * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
         */
-    if ((MAX_POINT > 0 && current_point >= MAX_POINT) || current_fee >= MAX_FEE) {
+    if ((MAX_POINT === 0 || (MAX_POINT > 0 && current_point >= MAX_POINT)) && current_fee >= MAX_FEE) {
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
         if ((balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) || tnx_count === 0) {
@@ -127,9 +126,17 @@ async function startTransactions(SM_USE, chainID, account) {
     let gasPrice = await getLowGasPrice(CEIL_GAS);
     try {
       console.log(`~~~~~~~~~~~~~~Start wrap/unwrap of ${shortAddress(account.address)}`)
+
+      if (gasPrice === null || gasPrice === undefined || gasPrice === 0n) {
+        gasPrice = 200000002n;
+      }
+      duraGasPrice = gasPrice < min_gwei ? min_gwei : gasPrice;
+      console.log("~~~~~~~~~~~~~~Gas Price:", web3.utils.fromWei(duraGasPrice.toString(), 'gwei'), "Gwei");
+
       const balance = await handleError(web3.eth.getBalance(account.address));
       const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (MIN_BALANCE / 2);
       if (isTnxWithdraw === -1) {
+        await new Promise((resolve) => setTimeout(resolve, wait_10s)); // wait 10s to starting
         if (balance_in_eth > MIN_BALANCE) {
           isTnxWithdraw = 0; // Deposit
         } else {
@@ -137,14 +144,8 @@ async function startTransactions(SM_USE, chainID, account) {
         }
       }
 
-      // check if gasPrice is null or 0n
-      if (gasPrice === null || gasPrice === undefined || gasPrice === 0n) {
-        gasPrice = 200000002n;
-      }
-      duraGasPrice = gasPrice < min_gwei ? min_gwei : gasPrice;
-      console.log("~~~~~~~~~~~~~~Gas Price:", web3.utils.fromWei(duraGasPrice.toString(), 'gwei'), "Gwei");
-
       // ================== DepositOrWithdraw ==================
+      await new Promise((resolve) => setTimeout(resolve, wait_10s/5)); 
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(isTnxWithdraw, SM_USE, chainID, tnx_count, account, duraGasPrice);
       // ================== DepositOrWithdraw ==================
 
@@ -171,11 +172,9 @@ async function startTransactions(SM_USE, chainID, account) {
         console.error('Fee is not a BigInt:', fee);
       }
       console.log("Fee:", convertWeiToNumber(fee, 18, 8), "- Current Fee:", Number(current_fee.toPrecision(3)), "- Current Point:", current_point);
-      await new Promise((resolve) => setTimeout(resolve, wait_10s));
     }
     else {
-
-      await new Promise((resolve) => setTimeout(resolve, wait_10s));
+      await new Promise((resolve) => setTimeout(resolve, wait_10s)); 
       // check nonce if the transaction is still mine in wait_10s and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
@@ -200,7 +199,6 @@ async function startTransactions(SM_USE, chainID, account) {
         failed_tnx_count++;
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 5, the transaction will be canceled");
         if (failed_tnx_count > 5) {
-
           // check isTnxWithdraw again
           let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
           if (tmpIsWithdraw !== isTnxWithdraw) {
@@ -224,7 +222,6 @@ async function startTransactions(SM_USE, chainID, account) {
           console.log("Switch to RPC:", web3.providers);
 
         }
-        await new Promise((resolve) => setTimeout(resolve, wait_10s));
       }
     }
 
@@ -344,12 +341,22 @@ const processWallet = async (account) => {
   let [points, fee] = await startTransactions(SM_USE, chainID, account);
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
-  const target_fee = 0.000355; //in ETH
-  if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee = MAX_FEE
+  const target_point = 75000;
+  if (points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
+    MAX_POINT = target_point - points;
+    console.log("Change MAX_POINT to", MAX_POINT);
+    // call startTransactions again
+    let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
+    points += add_points;
+    fee += add_fee;
+  }
+
+  const target_fee = 0.0003; //in ETH
+  if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee phai bang gia tri nho nhat của MAX_FEE (target_fee)
     if (points >= MAX_POINT) {
       // call method `vote`
       console.log("\nStart voting to fill the fee!!!");
-      const remainingGas = target_fee - fee;
+      const remainingGas = target_fee - fee - 0.000005;
       await SendTnx(0, remainingGas, account);
       fee += remainingGas;
     }
@@ -363,14 +370,7 @@ const processWallet = async (account) => {
     }
   }
 
-  const target_point = 75000;
-  if (target_point <= MAX_POINT && points < target_point) { // Thuc chat points = MAX_POINT
-    MAX_POINT = target_point - points;
-    console.log("Change MAX_POINT to", MAX_POINT);
-    // call startTransactions again
-    let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
-    points += add_points;
-  }
+
 
   const currentTime = new Date();
   currentTime.setHours(currentTime.getHours() + 7);
