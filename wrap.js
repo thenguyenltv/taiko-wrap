@@ -93,7 +93,7 @@ async function startTransactions(SM_USE, chainID, account) {
   let duraGasPrice = await handleError(web3.eth.getGasPrice());
 
   const StartNonce = await handleError(web3.eth.getTransactionCount(account.address));
-  let current_point = 1, current_fee = 0;
+  let current_point = 0, current_fee = 0;
   let tnx_count = 0, failed_tnx_count = 0;
   let wait_10s = 10000; // unit (ms), 1000ms = 1s
   let start = new Date().getTime();
@@ -344,6 +344,7 @@ const processWallet = async (account) => {
   const target_point = 75000;
   if (MAX_POINT > 0 && points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
     MAX_POINT = target_point - points;
+    MAX_FEE = Math.max(MAX_FEE - fee, 0);
     console.log("Change MAX_POINT to", MAX_POINT);
     // call startTransactions again
     let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
@@ -362,6 +363,7 @@ const processWallet = async (account) => {
     }
     else {
       MAX_FEE = target_fee - fee;
+      MAX_POINT = MAX_POINT - points;
       console.log("Change MAX_FEE to", MAX_FEE);
       // call startTransactions again
       let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
@@ -473,7 +475,7 @@ async function main() {
   console.log("o Run on", chainID);
   console.log("o SM:", SM_USE._address);
   console.log("o RPC:", RPC_URL);
-  console.log("o POINT: ", MAX_POINT, "- MAX FEE: ", MAX_FEE);
+  console.log("o POINT:", MAX_POINT, "- MAX FEE:", MAX_FEE);
 
   const autoRun = async () => {
     console.log("\nQuá thời gian chờ. Tự động chạy tool...");
