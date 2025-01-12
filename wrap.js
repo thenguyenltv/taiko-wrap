@@ -123,8 +123,8 @@ async function startTransactions(SM_USE, chainID, account) {
 
     /* Try sending transaction */
     let status = false, fee = 0n, amount = 0
-    let gasPrice = await getLowGasPrice(CEIL_GAS);
     try {
+      let gasPrice = await getLowGasPrice(CEIL_GAS);
       console.log(`~~~~~~~~~~~~~~Start wrap/unwrap of ${shortAddress(account.address)}`)
 
       if (gasPrice === null || gasPrice === undefined || gasPrice === 0n) {
@@ -209,8 +209,7 @@ async function startTransactions(SM_USE, chainID, account) {
           }
 
           /** Send `Cancel Transaction` */
-          const latestGasPrice = await handleError(web3.eth.getGasPrice());
-          const receipt = await handleError(cancelTransaction(latestGasPrice, account));
+          const receipt = await handleError(cancelTransaction(account));
           if (receipt) {
             console.log("Cancel transaction successfully");
             tnx_count++;
@@ -371,8 +370,6 @@ const processWallet = async (account) => {
       points += add_points;
     }
   }
-
-
 
   const currentTime = new Date();
   currentTime.setHours(currentTime.getHours() + 7);
