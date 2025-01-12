@@ -177,10 +177,11 @@ async function checkBalanceAndSetWithdraw(account) {
  * To cancel a transaction: replacing the transaction with another 0 ETH transaction 
  * with a higher (10%) gas fee sending to yourself with the same nonce as the pending transaction
  */
-async function cancelTransaction(latestGasPrice, account) {
+async function cancelTransaction(account) {
     try {
         // upgrade 10% gas fee
-        const gasPrice = latestGasPrice * BigInt(110) / BigInt(100);
+        let gasPrice = await web3.eth.getGasPrice();
+        gasPrice = gasPrice * BigInt(110) / BigInt(100);
         console.log("Canceling transaction with gas price:", gasPrice);
 
         // get the latest nonce
