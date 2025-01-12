@@ -377,7 +377,8 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             // update balance in seconds
             let balance = await web3.eth.getBalance(account.address);
             let amount_in_wei = balance - (BigInt(min_eth_in_wei) / 2n);
-            async () => {
+            await (async () => {
+                console.log("Before send - Check balance of WETH...");
                 let attempts = 0;
                 const maxAttempts = 5;
 
@@ -390,7 +391,10 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
                 if (amount_in_wei < min_eth_in_wei) {
                     throw new Error(`Insufficient balance to deposit, current balance: ${convertWeiToNumber(balance)} ETH, need at least ${convertWeiToNumber(min_eth_in_wei)} ETH`);
                 }
-            }
+                else {
+                    console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
+                }
+            })();
 
             if (chainID == 167009) {
                 // amount_in_wei = amount_in_wei / 25n;
@@ -402,14 +406,14 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             amount = Number(amountInEther);
 
             // ============================================
-            console.log(`\n${indexTnx + 1}. Deposit...`, convertWeiToNumber(amount_in_wei), "ETH to WETH");
             [receipt, pre_gas, gas_price] = await deposit(SM_USE, chainID, amountInEther, account, tnxGasPrice);
             // ============================================
 
             fee = await checkFinality(receipt);
 
             // check until balance of WETH >= amount_in_wei
-            async () => {
+            await (async () => {
+                console.log("After send - Check balance of WETH...");
                 let newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
                 const start = new Date().getTime();
                 let end, time;
@@ -426,7 +430,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
                         throw new Error(`Balance - Timeout exceeded while waiting for updated.`);
                     }
                 }
-            }
+            })();
 
             return [status, fee, amount, gas_price];
         }
@@ -434,7 +438,8 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             // update balance in seconds
             let balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (balanceOf / BigInt(500));
-            async () => {
+            await (async () => {
+                console.log("Before send - Check balance of WETH...");
                 let attempts = 0;
                 const maxAttempts = 5;
 
@@ -447,7 +452,10 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
                 if (weth_in_wei < min_eth_in_wei) {
                     throw new Error(`Insufficient balance to withdraw, current balance: ${convertWeiToNumber(balanceOf)} WETH, need at least ${convertWeiToNumber(min_eth_in_wei)} WETH`);
                 }
-            }
+                else {
+                    console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(weth_in_wei), "WETH to ETH");
+                }
+            })();
 
             if (chainID == 167009) {
                 // weth_in_wei = weth_in_wei / 25n;
@@ -456,14 +464,15 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             }
 
             // ============================================
-            console.log(`\n${indexTnx + 1}. Withdraw...`, convertWeiToNumber(weth_in_wei), "WETH to ETH");
             [receipt, pre_gas, gas_price] = await withdraw(SM_USE, chainID, weth_in_wei, account, tnxGasPrice);
             // ============================================
 
             fee = await checkFinality(receipt);
 
             // check until balance of ETH >= weth_in_wei
-            async () => {
+            await ( async () => {
+                console.log("After send - Check balance of WETH...");
+
                 let newBalance = await web3.eth.getBalance(account.address);
                 const start = new Date().getTime();
                 let end, time;
@@ -482,11 +491,11 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
                     }
 
                 }
-            }
+            })();
 
             return [status, fee, 0, gas_price];
         }
-    } catch (err) {
+    } catch (err) {  
         console.error("Wrap/Unwrap failed:", err.message);
         console.log("fee:", fee, "amount:", amount, "pre_gas:", pre_gas);
         // receipt undefined, dm await roi van return undefined, rpc dom?
