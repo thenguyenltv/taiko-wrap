@@ -145,7 +145,7 @@ async function startTransactions(SM_USE, chainID, account) {
       }
 
       // ================== DepositOrWithdraw ==================
-      await new Promise((resolve) => setTimeout(resolve, wait_10s/5)); 
+      await new Promise((resolve) => setTimeout(resolve, wait_10s / 5));
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(isTnxWithdraw, SM_USE, chainID, tnx_count, account, duraGasPrice);
       // ================== DepositOrWithdraw ==================
 
@@ -174,7 +174,7 @@ async function startTransactions(SM_USE, chainID, account) {
       console.log("Fee:", convertWeiToNumber(fee, 18, 8), "- Current Fee:", Number(current_fee.toPrecision(3)), "- Current Point:", current_point);
     }
     else {
-      await new Promise((resolve) => setTimeout(resolve, wait_10s)); 
+      await new Promise((resolve) => setTimeout(resolve, wait_10s));
       // check nonce if the transaction is still mine in wait_10s and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
@@ -277,58 +277,58 @@ async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
   const TOTAL_GAS_In_Wei = web3.utils.toWei((Math.ceil(parseInt(TOTAL_POINT) / MULTI_POINT * 10)).toString(), 'Gwei');
   const total_gas = TOTAL_GAS_In_Wei === '0' ? TOTAL_GAS : web3.utils.fromWei(TOTAL_GAS_In_Wei, 'ether');
   console.log(`\nTotal Point: ${parseInt(TOTAL_POINT)}`);
-  console.log("Total gas:",  convertWeiToNumber(total_gas, 0, 6), "ETH");
-  
+  console.log("Total gas:", convertWeiToNumber(total_gas, 0, 6), "ETH");
+
   let TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT;
 
   let NONCE = await handleError(web3.eth.getTransactionCount(account.address));
-  if(NONCE == null || NONCE == undefined){
-      console.log("Fetching error");
-      return;
+  if (NONCE == null || NONCE == undefined) {
+    console.log("Fetching error");
+    return;
   }
   let startNonceRound = NONCE;
-  
+
   let txCount = 0, remainingGas, gas_consumed = 0, Gas_Price;
   while (gas_consumed < Number(total_gas)) {
-      Gas_Price = await handleError(web3.eth.getGasPrice());
-      remainingGas = Number(total_gas) - gas_consumed;
-      [TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT] = ProcessTotalGas(remainingGas, Gas_Price);
+    Gas_Price = await handleError(web3.eth.getGasPrice());
+    remainingGas = Number(total_gas) - gas_consumed;
+    [TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT] = ProcessTotalGas(remainingGas, Gas_Price);
 
-      console.log('\x1b[34m%s\x1b[0m', `\nSending ${TNX_PER_BATCH} transactions with NONCE start ${NONCE}...`);
-      // await new Promise(resolve => setTimeout(resolve, 1500));
+    console.log('\x1b[34m%s\x1b[0m', `\nSending ${TNX_PER_BATCH} transactions with NONCE start ${NONCE}...`);
+    // await new Promise(resolve => setTimeout(resolve, 1500));
 
-      [tx, fee] = await InitializeVoting(NONCE, Gas_Price, GAS_FEE_INCREASE_PERCENT);
-      if (tx == null || fee == null) {
-          await new Promise(resolve => setTimeout(resolve, WAIT_60S/6));
-          continue;
+    [tx, fee] = await InitializeVoting(NONCE, Gas_Price, GAS_FEE_INCREASE_PERCENT);
+    if (tx == null || fee == null) {
+      await new Promise(resolve => setTimeout(resolve, WAIT_60S / 6));
+      continue;
+    }
+
+    for (let i = 0; i < TNX_PER_BATCH; i++) {
+      try {
+        tnxType2(account, tx);
+        console.log(`Fee: ${convertWeiToNumber(fee, 0, 8)} ETH`);
+        gas_consumed += parseFloat(fee);
+        NONCE += BigInt(1);
+        tx.nonce = NONCE;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error) {
+        console.error('Sending Tnx Error:', error.message);
       }
-      
-      for (let i = 0; i < TNX_PER_BATCH; i++) {
-          try {
-              tnxType2(account, tx);
-              console.log(`Fee: ${convertWeiToNumber(fee, 0, 8)} ETH`);
-              gas_consumed += parseFloat(fee);
-              NONCE += BigInt(1);
-              tx.nonce = NONCE;
-              await new Promise(resolve => setTimeout(resolve, 100));
-          } catch (error) {
-              console.error('Sending Tnx Error:', error.message);
-          }
-      }   
+    }
 
-      let nonce;
-      for (let j = 0; j < 60; j++) {
-          nonce = await handleError(web3.eth.getTransactionCount(account.address));
-          if (nonce >= startNonceRound + BigInt(TNX_PER_BATCH)) {
-              console.log(`--> Done ${nonce - startNonceRound} transactions!!!`);
-              console.log("--> Gas consumed:", convertWeiToNumber(gas_consumed, 0, 6), "ETH");
-              break;
-          }
-          await new Promise(resolve => setTimeout(resolve, WAIT_60S/10));
+    let nonce;
+    for (let j = 0; j < 60; j++) {
+      nonce = await handleError(web3.eth.getTransactionCount(account.address));
+      if (nonce >= startNonceRound + BigInt(TNX_PER_BATCH)) {
+        console.log(`--> Done ${nonce - startNonceRound} transactions!!!`);
+        console.log("--> Gas consumed:", convertWeiToNumber(gas_consumed, 0, 6), "ETH");
+        break;
       }
+      await new Promise(resolve => setTimeout(resolve, WAIT_60S / 10));
+    }
 
-      txCount += Number(nonce - startNonceRound);
-      NONCE = startNonceRound = nonce;
+    txCount += Number(nonce - startNonceRound);
+    NONCE = startNonceRound = nonce;
 
   }
 }
@@ -403,6 +403,7 @@ async function runProcess(ACCOUNTS) {
      * 2.2 Balance của nextAccount >= amount_to_send
      */
     const balance = await handleError(web3.eth.getBalance(currentAccount.address));
+    const nowNextBalance = await handleError(web3.eth.getBalance(nextAccount.address));
     if (ACCOUNTS.length > 1) {
       while (true) {
         let currentBalance = await handleError(web3.eth.getBalance(currentAccount.address));
@@ -416,7 +417,7 @@ async function runProcess(ACCOUNTS) {
         let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
 
         // Stop if done before
-        if (currentBalance < balance - wei_to_send && nextBalance >= wei_to_send) {
+        if (currentBalance <= balance - wei_to_send || nextBalance >= wei_to_send || nextBalance > currentBalance) {
           console.log(`Send fund successfully`);
           break;
         }
@@ -428,13 +429,25 @@ async function runProcess(ACCOUNTS) {
           console.log(`Transaction hash: ${receipt.transactionHash}`);
           fee = await checkFinality(receipt);
           // check until balance of WETH >= amount_in_wei
-          async () => {
-            while (currentBalance < balance - wei_to_send && nextBalance >= wei_to_send) {
+          await (async () => {
+            const start = new Date().getTime();
+            let end, time;
+            while (currentBalance > balance - wei_to_send && nextBalance < nowNextBalance + wei_to_send) {
               await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 30));
               currentBalance = await web3.eth.getBalance(currentAccount.address);
               nextBalance = await web3.eth.getBalance(nextAccount.address);
+
+              end = new Date().getTime();
+              time = Math.round((end - start) / 1000);
+              if (time % 30 == 0) {
+                console.log("Check balacne exceed 30s, wait...");
+              }
+
+              if (time >= 120) {
+                throw new Error(`Balance - Timeout exceeded while waiting for updated.`);
+              }
             }
-          }
+          })();
 
           if (receipt) {
             console.log("Send successfully. Fee:", convertWeiToNumber(fee, 18, 8));
@@ -444,7 +457,9 @@ async function runProcess(ACCOUNTS) {
           }
         } catch (error) {
           console.error("An error occurred while sending funds");
+          await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
         }
+
       }
     }
   }
