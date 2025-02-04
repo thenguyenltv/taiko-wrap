@@ -177,6 +177,7 @@ async function startTransactions(SM_USE, chainID, account) {
     }
     else {
       await new Promise((resolve) => setTimeout(resolve, wait_10s));
+      isTnxWithdraw = await checkBalanceAndSetWithdraw(account);
       // check nonce if the transaction is still mine in wait_10s and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
@@ -202,27 +203,26 @@ async function startTransactions(SM_USE, chainID, account) {
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 5, the transaction will be canceled");
         if (failed_tnx_count > 5) {
           // check isTnxWithdraw again
+          await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
           let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
           if (tmpIsWithdraw !== isTnxWithdraw) {
-            // check in 1 minute
-            await new Promise((resolve) => setTimeout(resolve, wait_10s * 6));
-            tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
             isTnxWithdraw = tmpIsWithdraw;
-            continue; // skip the cancelTransaction
-          }
-
-          /** Send `Cancel Transaction` */
-          const receipt = await handleError(cancelTransaction(account));
-          if (receipt) {
-            console.log("Cancel transaction successfully");
+            console.log("Update isTnxWithdraw to", tmpIsWithdraw);
             tnx_count++;
-            failed_tnx_count = 0;
-            await new Promise((resolve) => setTimeout(resolve, wait_10s * 3));
           }
+          else {
+            /** Send `Cancel Transaction` */
+            const receipt = await handleError(cancelTransaction(account));
+            if (receipt) {
+              console.log("Cancel transaction successfully");
+              tnx_count++;
+              failed_tnx_count = 0;
+              await new Promise((resolve) => setTimeout(resolve, wait_10s * 3));
+            }
 
-          // web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
-          // console.log("Switch to RPC:", web3.providers);
-
+            // web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
+            // console.log("Switch to RPC:", web3.providers);
+          }
         }
       }
     }
@@ -345,7 +345,7 @@ const processWallet = async (account) => {
     points = 0;
     fee = 0;
   }
-  else  {
+  else {
     [points, fee] = await startTransactions(SM_USE, chainID, account);
   }
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
