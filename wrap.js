@@ -339,8 +339,15 @@ async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
 const processWallet = async (account) => {
   let start = new Date().getTime();
 
+  let points, fee;
   console.log(`\nProcessing wallet: ${account.address}`);
-  let [points, fee] = await startTransactions(SM_USE, chainID, account);
+  if (MAX_FEE === 0 && MAX_POINT === 0) {
+    points = 0;
+    fee = 0;
+  }
+  else  {
+    [points, fee] = await startTransactions(SM_USE, chainID, account);
+  }
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
   const target_point = 75000;
