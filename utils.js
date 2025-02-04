@@ -5,6 +5,7 @@ const {
 
 const fs = require('fs');
 const path = require('path');
+const nodemailer = require('nodemailer');
 
 /**
  * Function to log messages to the file
@@ -100,6 +101,35 @@ function logElapsedTime(start) {
   return [hours, minutes, seconds];
 }
 
+/**
+ * Send email to the user
+ */
+function sendEmail(body, subjectMail, mailTo) {
+  var transporter = nodemailer.createTransport({
+    service: 'yahoo',
+    auth: {
+      user: 'ketnoitvs43@yahoo.com',
+      pass: 'zapwoczxwcoamebc'
+    }
+  });
+  //zapwoczxwcoamebc
+
+  var mailOptions = {
+    from: 'ketnoitvs43@yahoo.com',
+    to: mailTo,
+    subject: subjectMail,
+    text: body
+  };
+
+  transporter.sendMail(mailOptions, function(error, info){
+    if (error) {
+      console.log(error);
+    } else {
+      console.log('Email sent: ' + info.response);
+    }
+  });
+}
+
 module.exports = {
   handleError,
   getPrice,
@@ -107,5 +137,8 @@ module.exports = {
   timeoutPromise,
   shortAddress,
   logMessage,
-  logElapsedTime
+  logElapsedTime,
+  sendEmail
 };
+
+// sendEmail('That was easy!', 'Sending Email using Node.js', 'facebookntaacc@gmail.com'); // Call the function to send email~
