@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "nodemailer": "^6.10.0",
     "web3": "^4.11.1"
   }
 }
