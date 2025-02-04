@@ -29,7 +29,8 @@ const {
   getPrice,
   shortAddress,
   logMessage,
-  logElapsedTime
+  logElapsedTime,
+  sendEmail
 } = require('./utils');
 
 const {
@@ -110,6 +111,7 @@ async function startTransactions(SM_USE, chainID, account) {
          * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
         */
     if ((MAX_POINT === 0 || (MAX_POINT > 0 && current_point >= MAX_POINT)) && current_fee >= MAX_FEE) {
+      console.log("Check stop condition:", current_point, current_fee);
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
         if ((balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) || tnx_count === 0) {
@@ -206,6 +208,7 @@ async function startTransactions(SM_USE, chainID, account) {
             await new Promise((resolve) => setTimeout(resolve, wait_10s * 6));
             tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
             isTnxWithdraw = tmpIsWithdraw;
+            continue; // skip the cancelTransaction
           }
 
           /** Send `Cancel Transaction` */
@@ -217,8 +220,8 @@ async function startTransactions(SM_USE, chainID, account) {
             await new Promise((resolve) => setTimeout(resolve, wait_10s * 3));
           }
 
-          web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
-          console.log("Switch to RPC:", web3.providers);
+          // web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
+          // console.log("Switch to RPC:", web3.providers);
 
         }
       }
@@ -379,9 +382,11 @@ const processWallet = async (account) => {
   );
 
   const [hours, minutes, _] = logElapsedTime(start);
-  logMessage(
-    `${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points - ${hours}h${minutes}m`
-  );
+  const body = `${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points - ${hours}h${minutes}m`;
+  console.log(body);
+  logMessage(body);
+
+  sendEmail(body, 'Taiko Wrap/Unwrap', 'facebookntaacc@gmail.com')
 };
 
 async function runProcess(ACCOUNTS) {
