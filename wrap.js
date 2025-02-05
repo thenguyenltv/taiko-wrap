@@ -177,7 +177,6 @@ async function startTransactions(SM_USE, chainID, account) {
     }
     else {
       await new Promise((resolve) => setTimeout(resolve, wait_10s));
-      isTnxWithdraw = await checkBalanceAndSetWithdraw(account);
       // check nonce if the transaction is still mine in wait_10s and have done
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
@@ -225,6 +224,7 @@ async function startTransactions(SM_USE, chainID, account) {
           }
         }
       }
+      isTnxWithdraw = await checkBalanceAndSetWithdraw(account);
     }
 
     /* Print the time consumed */
@@ -350,7 +350,7 @@ const processWallet = async (account) => {
   }
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
-  const target_point = 75000;
+  const target_point = 73580;
   if (MAX_POINT > 0 && points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
     MAX_POINT = target_point - points;
     MAX_FEE = Math.max(MAX_FEE - fee, 0);
