@@ -436,7 +436,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             return [status, fee, amount, gas_price];
         }
         else { // typeTnx=1 --> withdraw
-            // update balance in seconds
+            // Before withdraw, check balance of WETH
             let balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (balanceOf / BigInt(500));
             await (async () => {

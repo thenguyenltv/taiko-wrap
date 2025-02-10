@@ -112,9 +112,10 @@ async function startTransactions(SM_USE, chainID, account) {
         */
     if ((MAX_POINT === 0 || (MAX_POINT > 0 && current_point >= MAX_POINT)) && current_fee >= MAX_FEE) {
       console.log("Check stop condition:", current_point, current_fee);
+      await new Promise((resolve) => setTimeout(resolve, wait_10s*2));
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
-        if ((balance_in_eth > MIN_BALANCE && isTnxWithdraw === 0) || tnx_count === 0) {
+        if ((balance_in_eth > MIN_BALANCE*3 && isTnxWithdraw === 0) || tnx_count === 0) {
           console.log("Stop Wrap/Unwrap because of reaching the limit");
           return [current_point, current_fee];
         }
@@ -137,6 +138,7 @@ async function startTransactions(SM_USE, chainID, account) {
 
       const balance = await handleError(web3.eth.getBalance(account.address));
       const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (MIN_BALANCE / 2);
+      // First transaction
       if (isTnxWithdraw === -1) {
         await new Promise((resolve) => setTimeout(resolve, wait_10s)); // wait 10s to starting
         if (balance_in_eth > MIN_BALANCE) {
@@ -151,18 +153,16 @@ async function startTransactions(SM_USE, chainID, account) {
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(isTnxWithdraw, SM_USE, chainID, tnx_count, account, duraGasPrice);
       // ================== DepositOrWithdraw ==================
 
-      // check fee is number
+      // check and update values
       fee = fee === null ? 0n : fee;
-      // check amount is positive number
       amount = amount === null ? 0 : amount;
       amount = amount < 0 ? 0 : amount;
-
       eth_price = await getPrice('ethereum');
-
     } catch (error) {
       eth_price = 3000; // Fallback price if fetching fails
     }
 
+    // check status of transaction
     if (status) {
       tnx_count++;
       failed_tnx_count = 0;
@@ -181,7 +181,7 @@ async function startTransactions(SM_USE, chainID, account) {
       const nonce = await handleError(web3.eth.getTransactionCount(account.address));
       if (nonce == StartNonce + BigInt(tnx_count + 1)) {
         console.log("Continue to next transaction...");
-        // Cong 1 cho tnx_count
+        // After waiting 10s, transaction is successful
         try {
           tnx_count++;
           isTnxWithdraw = 1 - isTnxWithdraw;
@@ -272,6 +272,7 @@ async function InitializeVoting(NONCE, gasPrice, gasIncrease) {
   }
 }
 
+/** Voting method */
 async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
 
   // gwei / 10 * 2 = total_point
@@ -338,8 +339,11 @@ async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
 
 const processWallet = async (account) => {
   let start = new Date().getTime();
-
   let points, fee;
+  const target_point = 73580;
+  const target_fee = 0.0003; //in ETH
+  let add_points, add_fee;
+
   console.log(`\nProcessing wallet: ${account.address}`);
   if (MAX_FEE === 0 && MAX_POINT === 0) {
     points = 0;
@@ -350,18 +354,16 @@ const processWallet = async (account) => {
   }
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
 
-  const target_point = 73580;
   if (MAX_POINT > 0 && points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
     MAX_POINT = target_point - points;
     MAX_FEE = Math.max(MAX_FEE - fee, 0);
     console.log("Change MAX_POINT to", MAX_POINT);
     // call startTransactions again
-    let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
+    [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
     points += add_points;
     fee += add_fee;
   }
 
-  const target_fee = 0.0003; //in ETH
   if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee phai bang gia tri nho nhat của MAX_FEE (target_fee)
     if (points >= MAX_POINT) {
       // call method `vote`
@@ -392,7 +394,6 @@ const processWallet = async (account) => {
   const body = `${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points - ${hours}h${minutes}m`;
   console.log(body);
   logMessage(body);
-
   sendEmail(body, 'Taiko Wrap/Unwrap', 'facebookntaacc@gmail.com')
 };
 
@@ -409,29 +410,30 @@ async function runProcess(ACCOUNTS) {
     await processWallet(currentAccount);
 
     /** Send fund to next wallet 
-     * 1. aoumnt_to_send = 99,7% balance
+     * 1. aoumnt_to_send = balance - 0.0005 ETH
      * 2. Kiểm tra tính đúng đắn
      * 2.1 Giao dịch có transactionHash, fee
      * 2.2 Balance của nextAccount >= amount_to_send
      */
-    const balance = await handleError(web3.eth.getBalance(currentAccount.address));
-    const nowNextBalance = await handleError(web3.eth.getBalance(nextAccount.address));
     if (ACCOUNTS.length > 1) {
       while (true) {
-        let currentBalance = await handleError(web3.eth.getBalance(currentAccount.address));
-        let nextBalance = await handleError(web3.eth.getBalance(nextAccount.address));
-
         let fee;
-
-        // amount_to_send = 99,7% balance
-        let wei_to_send = balance - 500000000000000n; // decrease 0.0005 ETH
-        console.log("Balance", convertWeiToNumber(balance), "- amou to send:", convertWeiToNumber(wei_to_send));
-        let amount_in_eth = Number(web3.utils.fromWei(wei_to_send.toString(), 'ether'));
+        let currentWLBalance = await handleError(web3.eth.getBalance(currentAccount.address));
+        let nextWLBalance = await handleError(web3.eth.getBalance(nextAccount.address));
+        let amount_in_eth = Number(web3.utils.fromWei(currentWLBalance.toString(), 'ether')) - MIN_BALANCE*2;
+        console.log("Balance", convertWeiToNumber(balance), "- amou to send:", amount_in_eth);
 
         // Stop if done before
-        if (currentBalance <= balance - wei_to_send || nextBalance >= wei_to_send || nextBalance > currentBalance) {
+        if (currentWLBalance > MIN_BALANCE && nextWLBalance > currentWLBalance) {
           console.log(`Send fund successfully`);
           break;
+        }
+
+        // Before sending, check if the balance is enough
+        if (amount_in_eth < MIN_BALANCE*2) {
+          console.log("Not enough balance to send. Waiting...");
+          await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+          continue;
         }
 
         // not run if done before
@@ -440,28 +442,8 @@ async function runProcess(ACCOUNTS) {
           const receipt = await sendFunds(currentAccount, nextAccount.address, amount_in_eth);
           console.log(`Transaction hash: ${receipt.transactionHash}`);
           fee = await checkFinality(receipt);
-          // check until balance of WETH >= amount_in_wei
-          await (async () => {
-            const start = new Date().getTime();
-            let end, time;
-            while (currentBalance > balance - wei_to_send && nextBalance < nowNextBalance + wei_to_send) {
-              await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 30));
-              currentBalance = await web3.eth.getBalance(currentAccount.address);
-              nextBalance = await web3.eth.getBalance(nextAccount.address);
 
-              end = new Date().getTime();
-              time = Math.round((end - start) / 1000);
-              if (time % 30 == 0) {
-                console.log("Check balacne exceed 30s, wait...");
-              }
-
-              if (time >= 120) {
-                throw new Error(`Balance - Timeout exceeded while waiting for updated.`);
-              }
-            }
-          })();
-
-          if (receipt) {
+          if (receipt && fee) {
             console.log("Send successfully. Fee:", convertWeiToNumber(fee, 18, 8));
             console.log(`Waiting ${WAIT_60S / 2000}s before processing the next wallet...`);
             await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
@@ -472,6 +454,7 @@ async function runProcess(ACCOUNTS) {
           await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
         }
 
+        await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
       }
     }
   }
