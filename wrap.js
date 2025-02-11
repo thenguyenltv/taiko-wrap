@@ -421,7 +421,7 @@ async function runProcess(ACCOUNTS) {
         let currentWLBalance = await handleError(web3.eth.getBalance(currentAccount.address));
         let nextWLBalance = await handleError(web3.eth.getBalance(nextAccount.address));
         let amount_in_eth = Number(web3.utils.fromWei(currentWLBalance.toString(), 'ether')) - MIN_BALANCE*2;
-        console.log("Balance", convertWeiToNumber(balance), "- amou to send:", amount_in_eth);
+        console.log("Balance", convertWeiToNumber(currentWLBalance), "- amou to send:", amount_in_eth);
 
         // Stop if done before
         if (currentWLBalance > MIN_BALANCE && nextWLBalance > currentWLBalance) {
