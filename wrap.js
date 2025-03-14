@@ -112,10 +112,10 @@ async function startTransactions(SM_USE, chainID, account) {
         */
     if ((MAX_POINT === 0 || (MAX_POINT > 0 && current_point >= MAX_POINT)) && current_fee >= MAX_FEE) {
       console.log("Check stop condition:", current_point, current_fee);
-      await new Promise((resolve) => setTimeout(resolve, wait_10s*2));
+      await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
-        if ((balance_in_eth > MIN_BALANCE*3 && isTnxWithdraw === 0) || tnx_count === 0) {
+        if ((balance_in_eth > MIN_BALANCE * 3 && isTnxWithdraw === 0) || tnx_count === 0) {
           console.log("Stop Wrap/Unwrap because of reaching the limit");
           return [current_point, current_fee];
         }
@@ -352,7 +352,7 @@ const processWallet = async (account) => {
   else {
     [points, fee] = await startTransactions(SM_USE, chainID, account);
   }
-  await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
+  await new Promise(resolve => setTimeout(resolve, WAIT_60S / 3));
 
   if (MAX_POINT > 0 && points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
     MAX_POINT = target_point - points;
@@ -398,67 +398,98 @@ const processWallet = async (account) => {
 };
 
 async function runProcess(ACCOUNTS) {
-  for (let i = 0; i < ACCOUNTS.length; i++) {
-    const currentAccount = ACCOUNTS[i];
-    const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
 
-    // check account first
-    const ether = convertWeiToNumber(await handleError(web3.eth.getBalance(currentAccount.address)));
-    const wrap_ether = convertWeiToNumber(await handleError(SM_USE.methods.balanceOf(currentAccount.address).call()));
-    console.log("Current Account:", shortAddress(currentAccount.address), "- Balance:", ether, "- WETH:", wrap_ether);
+  try {
+    // Check the balance of all accounts
+    // And choose the account with the highest balance to ru process
+    // The account with the highest balance will be the first account
+    // Kiểm tra số dư của tất cả các tài khoản và chọn tài khoản có số dư cao nhất
+    let highestBalanceAccount = ACCOUNTS[0];
+    let highestBalance = 0;
 
-    await processWallet(currentAccount);
-
-    /** Send fund to next wallet 
-     * 1. aoumnt_to_send = balance - 0.0005 ETH
-     * 2. Kiểm tra tính đúng đắn
-     * 2.1 Giao dịch có transactionHash, fee
-     * 2.2 Balance của nextAccount >= amount_to_send
-     */
-    if (ACCOUNTS.length > 1) {
-      while (true) {
-        let fee;
-        let currentWLBalance = await handleError(web3.eth.getBalance(currentAccount.address));
-        let nextWLBalance = await handleError(web3.eth.getBalance(nextAccount.address));
-        let amount_in_eth = Number(web3.utils.fromWei(currentWLBalance.toString(), 'ether')) - MIN_BALANCE*2;
-        console.log("Balance", convertWeiToNumber(currentWLBalance), "- amou to send:", amount_in_eth);
-
-        // Stop if done before
-        if (currentWLBalance > MIN_BALANCE && nextWLBalance > currentWLBalance) {
-          console.log(`Send fund successfully`);
-          break;
-        }
-
-        // Before sending, check if the balance is enough
-        if (amount_in_eth < MIN_BALANCE*2) {
-          console.log("Not enough balance to send. Waiting...");
-          await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
-          continue;
-        }
-
-        // not run if done before
-        console.log(`Sending ${amount_in_eth.toPrecision(3)} to the next wallet: ${nextAccount.address}`);
-        try {
-          const receipt = await sendFunds(currentAccount, nextAccount.address, amount_in_eth);
-          console.log(`Transaction hash: ${receipt.transactionHash}`);
-          fee = await checkFinality(receipt);
-
-          if (receipt && fee) {
-            console.log("Send successfully. Fee:", convertWeiToNumber(fee, 18, 8));
-            console.log(`Waiting ${WAIT_60S / 2000}s before processing the next wallet...`);
-            await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
-            break;
-          }
-        } catch (error) {
-          console.error("An error occurred while sending funds");
-          await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+    for (const account of ACCOUNTS) {
+      const balance = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)));
+      if (balance > highestBalance) {
+        highestBalance = balance;
+        highestBalanceAccount = account;
       }
     }
+
+    // Đưa tài khoản có số dư cao nhất lên đầu danh sách
+    const highestBalanceIndex = ACCOUNTS.indexOf(highestBalanceAccount);
+    if (highestBalanceIndex > 0) {
+      ACCOUNTS.splice(highestBalanceIndex, 1);
+      ACCOUNTS.unshift(highestBalanceAccount);
+    }
+
+    for (let i = 0; i < ACCOUNTS.length; i++) {
+      const currentAccount = ACCOUNTS[i];
+      const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
+
+      // check account first
+      const ether = convertWeiToNumber(await handleError(web3.eth.getBalance(currentAccount.address)));
+      const wrap_ether = convertWeiToNumber(await handleError(SM_USE.methods.balanceOf(currentAccount.address).call()));
+      console.log("Current Account:", shortAddress(currentAccount.address), "- Balance:", ether, "- WETH:", wrap_ether);
+
+      await processWallet(currentAccount);
+
+      /** Send fund to next wallet 
+       * 1. aoumnt_to_send = balance - 0.0005 ETH
+       * 2. Kiểm tra tính đúng đắn
+       * 2.1 Giao dịch có transactionHash, fee
+       * 2.2 Balance của nextAccount >= amount_to_send
+       */
+      if (ACCOUNTS.length > 1) {
+        while (true) {
+          let fee;
+          let currentWLBalance = await handleError(web3.eth.getBalance(currentAccount.address));
+          let nextWLBalance = await handleError(web3.eth.getBalance(nextAccount.address));
+          let amount_in_eth = Number(web3.utils.fromWei(currentWLBalance.toString(), 'ether')) - MIN_BALANCE * 2;
+          console.log("Balance", convertWeiToNumber(currentWLBalance), "- amou to send:", amount_in_eth);
+
+          // Stop if done before
+          if (currentWLBalance > MIN_BALANCE && nextWLBalance > currentWLBalance) {
+            console.log(`Send fund successfully`);
+            break;
+          }
+
+          // Before sending, check if the balance is enough
+          if (amount_in_eth < MIN_BALANCE * 2) {
+            console.log("Not enough balance to send. Waiting...");
+            await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+            continue;
+          }
+
+          // not run if done before
+          console.log(`Sending ${amount_in_eth.toPrecision(3)} to the next wallet: ${nextAccount.address}`);
+          try {
+            const receipt = await sendFunds(currentAccount, nextAccount.address, amount_in_eth);
+            console.log(`Transaction hash: ${receipt.transactionHash}`);
+            fee = await checkFinality(receipt);
+
+            if (receipt && fee) {
+              console.log("Send successfully. Fee:", convertWeiToNumber(fee, 18, 8));
+              console.log(`Waiting ${WAIT_60S / 2000}s before processing the next wallet...`);
+              await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
+              break;
+            }
+          } catch (error) {
+            console.error("An error occurred while sending funds");
+            await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+        }
+      }
+    }
+    console.log("All wallets processed.");
+  } catch (error) {
+    if (error.message === 'Process terminated at 0h UTC') {
+      console.log(error.message);
+    } else {
+      console.error("An unexpected error occurred:", error);
+    }
   }
-  console.log("All wallets processed.");
 };
 
 async function main() {
@@ -508,6 +539,24 @@ async function main() {
 }
 
 main();
+
+// Đặt hẹn giờ để dừng tiến trình vào 0h UTC
+setTimeout(() => {
+  console.log("💀 Đến 0h UTC, tiến trình bị dừng!");
+  process.exit(1); // Dừng toàn bộ chương trình ngay lập tức
+}, getTimeUntilMidnightUTC());
+
+function getTimeUntilMidnightUTC() {
+  const now = new Date();
+  const midnightUTC = new Date(now);
+  midnightUTC.setUTCHours(0, 0, 0, 0); // Đặt về 0h UTC
+
+  if (now >= midnightUTC) {
+    midnightUTC.setUTCDate(midnightUTC.getUTCDate() + 1); // Chuyển sang ngày tiếp theo
+  }
+
+  return midnightUTC - now; // Thời gian còn lại (milliseconds)
+}
 
 /**
  * Change colors reference of text
