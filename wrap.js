@@ -107,10 +107,10 @@ async function startTransactions(SM_USE, chainID, account) {
   while (true) {
 
     /** Stop Condition 
-         * 1. [Đạt được số điểm tối đa] AND [Phí giao dịch vượt quá giới hạn]
+         * 1. [Điểm vượt qua giới hạn] AND [Phí giao dịch vượt qua giới hạn]
          * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
         */
-    if ((MAX_POINT === 0 || (MAX_POINT > 0 && current_point >= MAX_POINT)) && current_fee >= MAX_FEE) {
+    if (current_point >= MAX_POINT && current_fee >= MAX_FEE) {
       console.log("Check stop condition:", current_point, current_fee);
       await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
@@ -354,34 +354,25 @@ const processWallet = async (account) => {
   }
   await new Promise(resolve => setTimeout(resolve, WAIT_60S / 3));
 
-  if (MAX_POINT > 0 && points < target_point) { // Points co the thap hơn target_point khi dat limit fee, can chay bo sung de points >= target_point
-    MAX_POINT = target_point - points;
-    MAX_FEE = Math.max(MAX_FEE - fee, 0);
-    console.log("Change MAX_POINT to", MAX_POINT);
-    // call startTransactions again
-    [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
-    points += add_points;
-    fee += add_fee;
-  }
 
-  if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee phai bang gia tri nho nhat của MAX_FEE (target_fee)
-    if (points >= MAX_POINT) {
-      // call method `vote`
-      console.log("\nStart voting to fill the fee!!!");
-      const remainingGas = target_fee - fee - 0.000005;
-      await SendTnx(0, remainingGas, account);
-      fee += remainingGas;
-    }
-    else {
-      MAX_FEE = target_fee - fee;
-      MAX_POINT = MAX_POINT - points;
-      console.log("Change MAX_FEE to", MAX_FEE);
-      // call startTransactions again
-      let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
-      fee += add_fee;
-      points += add_points;
-    }
-  }
+  // if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee phai bang gia tri nho nhat của MAX_FEE (target_fee)
+  //   if (points >= MAX_POINT) {
+  //     // call method `vote`
+  //     console.log("\nStart voting to fill the fee!!!");
+  //     const remainingGas = target_fee - fee - 0.000005;
+  //     await SendTnx(0, remainingGas, account);
+  //     fee += remainingGas;
+  //   }
+  //   else {
+  //     MAX_FEE = target_fee - fee;
+  //     MAX_POINT = MAX_POINT - points;
+  //     console.log("Change MAX_FEE to", MAX_FEE);
+  //     // call startTransactions again
+  //     let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
+  //     fee += add_fee;
+  //     points += add_points;
+  //   }
+  // }
 
   const currentTime = new Date();
   currentTime.setHours(currentTime.getHours() + 7);
@@ -408,11 +399,15 @@ async function runProcess(ACCOUNTS) {
     let highestBalance = 0;
 
     for (const account of ACCOUNTS) {
-      const balance = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)));
+      const ether_balance = await handleError(web3.eth.getBalance(account.address));
+      const wrap_balance = await handleError(SM_USE.methods.balanceOf(account.address).call());
+      const balance = convertWeiToNumber(ether_balance + wrap_balance);
       if (balance > highestBalance) {
         highestBalance = balance;
         highestBalanceAccount = account;
       }
+      console.log("Account:", shortAddress(account.address), "- Balance:", 
+        convertWeiToNumber(ether_balance), "- WETH:", convertWeiToNumber(wrap_balance));
     }
 
     // Đưa tài khoản có số dư cao nhất lên đầu danh sách
