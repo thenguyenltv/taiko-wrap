@@ -264,10 +264,16 @@ function CheckQueryListing(
     walletListingNFT = null
 ) {
     const data = response.data?.data?.data;
-    console.log(`Data for CheckQueryListing:
-                    - tokenId: ${data[0].tokenId ?? "N/A"}
-                    - maker: ${data[0].maker ?? "N/A"}
-                    - price: ${data[0].price ?? "N/A"}`);
+    if (data.length === 0 || !data) {
+        console.log("No Data to CheckQueryListing");
+        return null;
+    }
+    else {
+        console.log(`Data to CheckQueryListing:
+            - tokenId: ${data[0].tokenId ?? "N/A"}
+            - maker: ${data[0].maker ?? "N/A"}
+            - price: ${data[0].price ?? "N/A"}`);
+    }
     let flag = true;
     if (data) {
         for (let i = 0; i < data.length; i++) {
