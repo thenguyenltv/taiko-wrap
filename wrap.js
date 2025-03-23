@@ -655,7 +655,7 @@ async function main() {
   console.log(`\nWe found ${ACCOUNTS.length} account(s)`);
   for (let i = 0; i < ACCOUNTS.length; i++) {
     const account = ACCOUNTS[i];
-    console.log("Account ${i + 1}:", account.address);
+    console.log(`Account ${i + 1}: ${account.address}`);
   }
   console.log("\no __________________ WRAP  _________________");
   console.log("o Run on", chain);
