@@ -14,14 +14,56 @@ const PRIVATE_KEYS = [
   process.env.KEY10,
 ].filter(Boolean); // Danh sách các private keys
 
+const OKX_APIs = [
+  process.env.OKX_API1,
+  process.env.OKX_API2,
+  process.env.OKX_API3,
+  process.env.OKX_API4,
+  process.env.OKX_API5,
+  process.env.OKX_API6,
+  process.env.OKX_API7,
+  process.env.OKX_API8,
+  process.env.OKX_API9,
+  process.env.OKX_API10
+].filter(Boolean); // Danh sách các API Key của OKX
+
+const OKX_KEYs = [
+  process.env.OKX_KEY1,
+  process.env.OKX_KEY2,
+  process.env.OKX_KEY3,
+  process.env.OKX_KEY4,
+  process.env.OKX_KEY5,
+  process.env.OKX_KEY6,
+  process.env.OKX_KEY7,
+  process.env.OKX_KEY8,
+  process.env.OKX_KEY9,
+  process.env.OKX_KEY10
+].filter(Boolean); // Danh sách các Secret Key của OKX
+
+const OKX_PASSPHRASEs = [
+  process.env.OKX_PASSPHRASE1,
+  process.env.OKX_PASSPHRASE2,
+  process.env.OKX_PASSPHRASE3,
+  process.env.OKX_PASSPHRASE4,
+  process.env.OKX_PASSPHRASE5,
+  process.env.OKX_PASSPHRASE6,
+  process.env.OKX_PASSPHRASE7,
+  process.env.OKX_PASSPHRASE8,
+  process.env.OKX_PASSPHRASE9,
+  process.env.OKX_PASSPHRASE10
+].filter(Boolean); // Danh sách các Passpharase của OKX
+
 let RPC_URL = process.env.RPC_URL;
 RPC_URL = RPC_URL == undefined ? "https://rpc.hekla.taiko.xyz" : RPC_URL;
 const SUB_RPC1 = process.env.SUB_RPC1;
 const SUB_RPC2 = process.env.SUB_RPC2;
 const ListRPC = [RPC_URL];
-let MAX_POINT = Number(process.argv[2]);
-let MAX_FEE = Number(process.argv[3]);
+let MAX_POINT_WRAP = Number(process.argv[2]);
+let MAX_POINT_VOTE = Number(process.argv[3]);
 const MIN_GAS = Number(process.argv[4]);
+
+const { Web3 } = require('web3');
+const readline = require('readline');
 
 const {
   handleError,
@@ -34,12 +76,26 @@ const {
 } = require('./utils');
 
 const {
+  listNFT,
+  CheckListNFT,
+  signAndSubmitOrder,
+  GetQueryListing,
+  CheckQueryListing,
+  PostBuyNFT,
+  SignAndBuyNFT,
+  BuyNFTOnOKX,
+} = require('./OKX_NFT.js');
+
+const {
   CEIL_GAS,
-  MIN_GAS_PRICE
+  MIN_GAS_PRICE,
+  COLLECTION_ADDRESS,
+  COUNT,
+  CURRENCY_ADDRESS,
+  PLATFORM,
 } = require('./constant');
 
-const { Web3 } = require('web3');
-const readline = require('readline');
+const constants = require('./constant');
 
 const {
   getLowGasPrice,
@@ -72,7 +128,8 @@ const TEST_SM_WRAP = new web3.eth.Contract(TEST_ABI_WETH, TEST_SM_WETH);
 const IsTestnet = RPC_URL.includes("hekla") || RPC_URL.includes("testnet")
 const SM_USE = IsTestnet === true ? TEST_SM_WRAP : SM_WRAP;
 const chainID = IsTestnet === true ? Testnet : Mainnet;
-const WAIT_60S = 60000;
+const chain = chainID === Mainnet ? "taiko" : "Testnet";
+const WAIT_60S = 12000;
 
 const min_gwei = (MIN_GAS !== undefined && !isNaN(MIN_GAS)) ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
 console.log("Min Gas Price:", web3.utils.fromWei(min_gwei.toString(), 'gwei'), "Gwei");
@@ -102,15 +159,13 @@ async function startTransactions(SM_USE, chainID, account) {
 
   let isTnxWithdraw = -1; // 0: Deposit, 1: Withdraw
 
-  await new Promise((resolve) => setTimeout(resolve, wait_10s / 2));
-
   while (true) {
 
     /** Stop Condition 
          * 1. [Điểm vượt qua giới hạn] AND [Phí giao dịch vượt qua giới hạn]
          * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
         */
-    if (current_point >= MAX_POINT && current_fee >= MAX_FEE) {
+    if (current_point >= MAX_POINT_WRAP) {
       console.log("Check stop condition:", current_point, current_fee);
       await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
@@ -118,6 +173,9 @@ async function startTransactions(SM_USE, chainID, account) {
         if ((balance_in_eth > MIN_BALANCE * 3 && isTnxWithdraw === 0) || tnx_count === 0) {
           console.log("Stop Wrap/Unwrap because of reaching the limit");
           return [current_point, current_fee];
+        }
+        else {
+          console.log("Continue to withdraw to have eth balance > MIN_BALANCE");
         }
       } catch (error) {
         console.error('An error occurred:', error);
@@ -273,13 +331,13 @@ async function InitializeVoting(NONCE, gasPrice, gasIncrease) {
 }
 
 /** Voting method */
-async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
+async function Voting(account, TOTAL_POINT = 300, TOTAL_GAS = 0) {
 
   // gwei / 10 * 2 = total_point
   // ==> gwei = total_point / 2 * 10
   // Do do, total_gas = gwei --> ether
   const TOTAL_GAS_In_Wei = web3.utils.toWei((Math.ceil(parseInt(TOTAL_POINT) / MULTI_POINT * 10)).toString(), 'Gwei');
-  const total_gas = TOTAL_GAS_In_Wei === '0' ? TOTAL_GAS : web3.utils.fromWei(TOTAL_GAS_In_Wei, 'ether');
+  const total_gas = TOTAL_GAS_In_Wei === '0' ? TOTAL_GAS : Number(web3.utils.fromWei(TOTAL_GAS_In_Wei, 'ether'));
   console.log(`\nTotal Point: ${parseInt(TOTAL_POINT)}`);
   console.log("Total gas:", convertWeiToNumber(total_gas, 0, 6), "ETH");
 
@@ -333,56 +391,40 @@ async function SendTnx(TOTAL_POINT, TOTAL_GAS, account) {
 
     txCount += Number(nonce - startNonceRound);
     NONCE = startNonceRound = nonce;
-
   }
+  return [TOTAL_POINT, total_gas]
 }
 
 const processWallet = async (account) => {
   let start = new Date().getTime();
-  let points, fee;
-  const target_point = 73580;
-  const target_fee = 0.0003; //in ETH
-  let add_points, add_fee;
+  let pointsWrap = 0, feeWrap = 0, pointsVote = 0, feeVote = 0;
 
   console.log(`\nProcessing wallet: ${account.address}`);
-  if (MAX_FEE === 0 && MAX_POINT === 0) {
-    points = 0;
-    fee = 0;
+
+  // Start wrap/unwrap process
+  await new Promise(resolve => setTimeout(resolve, WAIT_60S / 6));
+  [pointsWrap, feeWrap] = await startTransactions(SM_USE, chainID, account);
+  await new Promise(resolve => setTimeout(resolve, WAIT_60S / 6));
+
+  // Start Vote process if address end with 8f3, b400, c1d
+  const last3Char = account.address.slice(-3).toUpperCase();
+  if (last3Char === '8F3' || last3Char === '400' || last3Char === 'C1D') {
+    console.log("Start voting process to earn Tnx Point...");
+    await new Promise(resolve => setTimeout(resolve, WAIT_60S / 6));
+    [pointsVote, feeVote] = await Voting(account, MAX_POINT_VOTE);
   }
   else {
-    [points, fee] = await startTransactions(SM_USE, chainID, account);
+    console.log(`This account ${account.address} is not eligible for voting because of the last 3 characters: ${last3Char}`);
   }
-  await new Promise(resolve => setTimeout(resolve, WAIT_60S / 3));
-
-
-  // if (target_fee <= MAX_FEE && fee < target_fee) { // Thuc chat fee phai bang gia tri nho nhat của MAX_FEE (target_fee)
-  //   if (points >= MAX_POINT) {
-  //     // call method `vote`
-  //     console.log("\nStart voting to fill the fee!!!");
-  //     const remainingGas = target_fee - fee - 0.000005;
-  //     await SendTnx(0, remainingGas, account);
-  //     fee += remainingGas;
-  //   }
-  //   else {
-  //     MAX_FEE = target_fee - fee;
-  //     MAX_POINT = MAX_POINT - points;
-  //     console.log("Change MAX_FEE to", MAX_FEE);
-  //     // call startTransactions again
-  //     let [add_points, add_fee] = await startTransactions(SM_USE, chainID, account);
-  //     fee += add_fee;
-  //     points += add_points;
-  //   }
-  // }
 
   const currentTime = new Date();
   currentTime.setHours(currentTime.getHours() + 7);
-  const shortDate = currentTime.toISOString().replace('T', ' ').substring(0, 19);
-  console.log(
-    `\n==> [${shortDate}] ${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points\n`
-  );
 
   const [hours, minutes, _] = logElapsedTime(start);
-  const body = `${shortAddress(account.address)} - ${Number(fee.toPrecision(3))} fee - ${points} Points - ${hours}h${minutes}m`;
+  const body = `${shortAddress(account.address)} - ` +
+    `${Number(feeWrap.toPrecision(3))} FeeW - ${pointsWrap} P_W - ` +
+    `${pointsVote} P_V - ${Number(feeVote.toPrecision(3))} FeeV - ` +
+    `${hours}h${minutes}m`;
   console.log(body);
   logMessage(body);
   sendEmail(body, 'Taiko Wrap/Unwrap', 'facebookntaacc@gmail.com')
@@ -391,13 +433,11 @@ const processWallet = async (account) => {
 async function runProcess(ACCOUNTS) {
 
   try {
-    // Check the balance of all accounts
-    // And choose the account with the highest balance to ru process
+    // Check the balance of all accounts (Balance = ETH + WETH)
+    // And choose the account with the highest balance to run process
     // The account with the highest balance will be the first account
-    // Kiểm tra số dư của tất cả các tài khoản và chọn tài khoản có số dư cao nhất
     let highestBalanceAccount = ACCOUNTS[0];
     let highestBalance = 0;
-
     for (const account of ACCOUNTS) {
       const ether_balance = await handleError(web3.eth.getBalance(account.address));
       const wrap_balance = await handleError(SM_USE.methods.balanceOf(account.address).call());
@@ -406,76 +446,177 @@ async function runProcess(ACCOUNTS) {
         highestBalance = balance;
         highestBalanceAccount = account;
       }
-      console.log("Account:", shortAddress(account.address), "- Balance:", 
+      console.log("Account:", shortAddress(account.address), "- Balance:",
         convertWeiToNumber(ether_balance), "- WETH:", convertWeiToNumber(wrap_balance));
     }
-
-    // Đưa tài khoản có số dư cao nhất lên đầu danh sách
     const highestBalanceIndex = ACCOUNTS.indexOf(highestBalanceAccount);
     if (highestBalanceIndex > 0) {
       ACCOUNTS.splice(highestBalanceIndex, 1);
       ACCOUNTS.unshift(highestBalanceAccount);
     }
 
+    // First, check the balance of the 1st account
+    // If the balance is less than MIN_BALANCE, stop the process
+    if (highestBalance < MIN_BALANCE) {
+      console.error("Balance of first account is less than MIN_BALANCE. Stop the process!!!");
+      process.exit(1); // Dừng toàn bộ chương trình ngay lập tức
+    }
+
+    const lengthOfAccounts = ACCOUNTS.length;
+    // // ================================================================================================
+    // 1. Listing nft on all accounts
+    const TOKEN_IDs = Object.keys(constants)
+      .filter(key => key.startsWith('TOKEN_ID'))
+      .map(key => constants[key]);
+    console.log("List of token ID:", TOKEN_IDs);
+    if (lengthOfAccounts > 1) {
+
+
+      // Price of 1 nft is the balance of the first account 
+      // minus the fee for wrap and vote in all accounts
+      const balanceEthInWei = await handleError(web3.eth.getBalance(ACCOUNTS[0].address));
+      let priceInWei = Number(balanceEthInWei);
+      for (let i = 0; i < ACCOUNTS.length; i++) {
+        let i_tmp = (i + 1) % ACCOUNTS.length;
+        priceInWei = priceInWei - Number(web3.utils.toWei("0.0005", 'ether'));
+        console.log("Price in ETH:", web3.utils.fromWei(priceInWei.toString(), 'ether'), "ETH");
+
+        // Listing tất cả các tokenId (1-->5)
+        console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
+        for (let index = 0; index < TOKEN_IDs.length; index++) {
+          let index_tmp = (index + 1) % TOKEN_IDs.length;
+
+          try {
+            await new Promise(resolve => setTimeout(resolve, WAIT_60S / 12));
+            const item = {
+              collectionAddress: COLLECTION_ADDRESS,
+              tokenId: TOKEN_IDs[index_tmp],
+              price: priceInWei,
+              currencyAddress: CURRENCY_ADDRESS,
+              count: COUNT,
+              platform: PLATFORM,
+            }
+            console.log("Item to list:", item);
+            const response = await listNFT(
+              ACCOUNTS[i_tmp].okx_key,
+              ACCOUNTS[i_tmp].okx_api,
+              ACCOUNTS[i_tmp].okx_pass,
+              "taiko",
+              ACCOUNTS[i_tmp].address,
+              item,
+            );
+            if (!response || !response.data) {
+              throw new Error("API không trả về dữ liệu hợp lệ!");
+            }
+
+            const res = await signAndSubmitOrder(
+              response,
+              ACCOUNTS[i_tmp].okx_key,
+              ACCOUNTS[i_tmp].okx_api,
+              ACCOUNTS[i_tmp].okx_pass,
+              ACCOUNTS[i_tmp].privateKey,
+            );
+            console.log(
+              "OrderID:", res.data.data?.successOrderIds[0] !== undefined ? res.data.data?.successOrderIds[0] : "N/A"
+            );
+          } catch (error) {
+            console.error("Error when try to list NFT:", error.message);
+          }
+        }
+      }
+    }
+    // ================================================================================================
+
+    // ================================================================================================
+    // 2. Start earning points from Wrap or Vote And buy NFT to transfer ETH
     for (let i = 0; i < ACCOUNTS.length; i++) {
       const currentAccount = ACCOUNTS[i];
       const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
+      const pastAcount = ACCOUNTS[Math.max(i - 1, 0)];
 
-      // check account first
+      // Show account
       const ether = convertWeiToNumber(await handleError(web3.eth.getBalance(currentAccount.address)));
       const wrap_ether = convertWeiToNumber(await handleError(SM_USE.methods.balanceOf(currentAccount.address).call()));
-      console.log("Current Account:", shortAddress(currentAccount.address), "- Balance:", ether, "- WETH:", wrap_ether);
+      console.log("\nCurrent account:", shortAddress(currentAccount.address), "- Balance:", ether, "- WETH:", wrap_ether);
+      console.log(`\tAPI Key: ${currentAccount.okx_api}`);
+      console.log(`\tSecret Key: ${currentAccount.okx_key}`);
 
+      // ================== Start Wrap/Unwrap And Voting ==================
       await processWallet(currentAccount);
 
-      /** Send fund to next wallet 
-       * 1. aoumnt_to_send = balance - 0.0005 ETH
-       * 2. Kiểm tra tính đúng đắn
-       * 2.1 Giao dịch có transactionHash, fee
-       * 2.2 Balance của nextAccount >= amount_to_send
-       */
-      if (ACCOUNTS.length > 1) {
-        while (true) {
-          let fee;
-          let currentWLBalance = await handleError(web3.eth.getBalance(currentAccount.address));
-          let nextWLBalance = await handleError(web3.eth.getBalance(nextAccount.address));
-          let amount_in_eth = Number(web3.utils.fromWei(currentWLBalance.toString(), 'ether')) - MIN_BALANCE * 2;
-          console.log("Balance", convertWeiToNumber(currentWLBalance), "- amou to send:", amount_in_eth);
+      await new Promise(resolve => setTimeout(resolve, WAIT_60S / 6));
 
-          // Stop if done before
-          if (currentWLBalance > MIN_BALANCE && nextWLBalance > currentWLBalance) {
-            console.log(`Send fund successfully`);
+      // ================== Start Buy NFT ==================
+      if (lengthOfAccounts > 1) {
+        console.log("Start buying NFT...");
+        let orderID = null;
+        for (let i = 0; i < TOKEN_IDs.length; i++) {
+          const resultQuery = await GetQueryListing(
+            currentAccount.okx_key,
+            currentAccount.okx_api,
+            currentAccount.okx_pass,
+            "taiko",
+            TOKEN_IDs[i],
+            COLLECTION_ADDRESS,
+            nextAccount.address.toLowerCase(),
+          );
+
+          orderID = CheckQueryListing(
+            resultQuery,
+            TOKEN_IDs[i],
+            COLLECTION_ADDRESS,
+            nextAccount.address.toLowerCase(),
+          );
+          if (orderID === null) {
+            console.log("OrderID is null. Skip this transaction");
+          }
+          else {
+            console.log(`Found NFT with orderId: ${orderID} and the token ID is ${TOKEN_IDs[i]}\n`);
             break;
           }
+          await new Promise(r => setTimeout(r, 2000));
+        }
 
-          // Before sending, check if the balance is enough
-          if (amount_in_eth < MIN_BALANCE * 2) {
-            console.log("Not enough balance to send. Waiting...");
-            await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
-            continue;
+        if (orderID !== null) {
+          const item = {
+            orderId: orderID,
+            takeCount: 1
           }
+          const resultPostBuy = await PostBuyNFT(
+            currentAccount.okx_key,
+            currentAccount.okx_api,
+            currentAccount.okx_pass,
+            "taiko",
+            currentAccount.address,
+            item,
+          );
+          // Lấy dữ liệu từ response
+          const rawTnxData = resultPostBuy.data?.data.steps[0].items[0];
+          const contractAddress = rawTnxData.contractAddress;
+          const inputData = rawTnxData.input;
+          const value = Number(rawTnxData.value); // in wei
+          // console.log("Raw transaction data:", rawTnxData);
 
-          // not run if done before
-          console.log(`Sending ${amount_in_eth.toPrecision(3)} to the next wallet: ${nextAccount.address}`);
-          try {
-            const receipt = await sendFunds(currentAccount, nextAccount.address, amount_in_eth);
-            console.log(`Transaction hash: ${receipt.transactionHash}`);
-            fee = await checkFinality(receipt);
-
-            if (receipt && fee) {
-              console.log("Send successfully. Fee:", convertWeiToNumber(fee, 18, 8));
-              console.log(`Waiting ${WAIT_60S / 2000}s before processing the next wallet...`);
-              await new Promise(resolve => setTimeout(resolve, WAIT_60S / 2));
-              break;
-            }
-          } catch (error) {
-            console.error("An error occurred while sending funds");
-            await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+          // Dữ liệu giao dịch lấy từ OKX API
+          const transactionData = {
+            to: contractAddress,
+            data: inputData,
+            value: value, // Giá trị cần gửi (wei)
+          };
+          console.log("Transaction data:", transactionData);
+          const receipt = await SignAndBuyNFT(
+            transactionData,
+            currentAccount,
+          );
+          if(receipt !== null) {
+            console.log("Buy NFT successfully");
           }
-
-          await new Promise((resolve) => setTimeout(resolve, WAIT_60S / 6));
+          else {
+            console.log("Buy NFT failed");
+          }
         }
       }
+      // ================================================================================================
     }
     console.log("All wallets processed.");
   } catch (error) {
@@ -488,38 +629,51 @@ async function runProcess(ACCOUNTS) {
 };
 
 async function main() {
+  // Kiểm tra các điều kiện ban đầu trước khi chạy tool
   if (PRIVATE_KEYS.length === 0) {
     console.error("No private keys provided. Please set the environment variables.");
     process.exit(1); // Dừng chương trình nếu không có private key nào hợp lệ
   }
 
-  const ACCOUNTS = PRIVATE_KEYS.map(key => web3.eth.accounts.privateKeyToAccount(key));
-
+  // const ACCOUNTS = PRIVATE_KEYS.map(key 
+  //   => web3.eth.accounts.privateKeyToAccount(key)
+  // );
+  const ACCOUNTS = PRIVATE_KEYS.map((key, index) => {
+    const account = web3.eth.accounts.privateKeyToAccount(key);
+    return {
+      ...account,
+      okx_key: OKX_KEYs[index],
+      okx_pass: OKX_PASSPHRASEs[index],
+      okx_api: OKX_APIs[index]
+    };
+  });
   if (ACCOUNTS.length === 0) {
     console.error("No valid accounts found. Please check your private keys.");
     process.exit(1);
   }
 
-  console.log(`Found ${ACCOUNTS.length} account(s)\n`);
+  console.log(`\nWe found ${ACCOUNTS.length} account(s)`);
   for (let i = 0; i < ACCOUNTS.length; i++) {
-    console.log(`Account ${i + 1}: ${ACCOUNTS[i].address}`);
+    const account = ACCOUNTS[i];
+    console.log(`Account ${i + 1}: ${shortAddress(account.address)}`);
   }
-  console.log("o __________________ WRAP  _________________");
-  console.log("o Run on", chainID);
+  console.log("\no __________________ WRAP  _________________");
+  console.log("o Run on", chain);
   console.log("o SM:", SM_USE._address);
   console.log("o RPC:", RPC_URL);
-  console.log("o POINT:", MAX_POINT, "- MAX FEE:", MAX_FEE);
+  console.log("o POINT WRAP:", MAX_POINT_WRAP);
+  console.log("o POINT VOTE:", MAX_POINT_VOTE);
 
   const autoRun = async () => {
     console.log("\nQuá thời gian chờ. Tự động chạy tool...");
     rl.close();
     await runProcess(ACCOUNTS);
+
   };
 
-  // Đặt timeout
-  const timer = setTimeout(autoRun, WAIT_60S);
 
-  // Chờ xác nhận từ người dùng
+  // Chờ xác nhận từ người dùng trước khi chạy tool (1 phút)
+  const timer = setTimeout(autoRun, WAIT_60S);
   rl.question("\nConfirm to continue? (Y/n): ", async (answer) => {
     clearTimeout(timer); // Dừng timer nếu nhận được đầu vào từ người dùng
     const userInput = answer.trim().toLowerCase();
