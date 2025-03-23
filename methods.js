@@ -1,4 +1,4 @@
-const { Web3, types } = require('web3');
+const { Web3 } = require('web3');
 let RPC = process.env.RPC_URL;
 if (RPC === undefined) {
     RPC = "https://rpc.hekla.taiko.xyz";
@@ -244,7 +244,7 @@ async function deposit(SM_USE, chainID, amount_in_eth, account, tnxGasPrice) {
 
         gas_price = (tnxGasPrice !== undefined) ? BigInt(tnxGasPrice) : await getLowGasPrice(200000002n);
 
-        const max_priority_fee_per_gas = gas_price * BigInt(100 + 0) / BigInt(100);
+        const max_priority_fee_per_gas = 100_000n; // in wei = 0.0001 gwei;
         const max_fee_per_gas = CEIL_GAS;
 
         // revert if CEIL_GAS < max_priority_fee_per_gas
@@ -308,7 +308,7 @@ async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
         const gas_limit = estimatedGas * BigInt(15) / BigInt(10);
         const nonce = await web3.eth.getTransactionCount(account.address, 'pending');
         gas_price = (tnxGasPrice !== undefined) ? BigInt(tnxGasPrice) : await getLowGasPrice(200000002n);
-        const max_priority_fee_per_gas = gas_price * BigInt(100 + 0) / BigInt(100);
+        const max_priority_fee_per_gas = 100_000n; // in wei = 0.0001 gwei;
         const max_fee_per_gas = CEIL_GAS;
 
         // revert if CEIL_GAS < max_priority_fee_per_gas
@@ -344,7 +344,6 @@ async function withdraw(SM_USE, chainID, amount, account, tnxGasPrice) {
             timeoutPromise(3 * 60 * wait_3s / 3), // 5 minutes in milliseconds
         ]);
         return [receipt, pre_gas, gas_price];
-
 
     } catch (error) {
         console.error("An error occurred while withdrawing:", error.message);

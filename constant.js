@@ -1,7 +1,7 @@
 module.exports = {
-  CEIL_GAS: 100000002n, // 1 gwei = 1.000.000.000 wei
-  MIN_GAS_PRICE: 20000000n,
-  MIN_BALANCE: 0.0004, // ETH units, the minimum balance to keep in the account
+  CEIL_GAS: 60_000_002n, // 1 gwei = 1.000.000.000 wei
+  MIN_GAS_PRICE: 6_000_000n, 
+  MIN_BALANCE: 0.0004, // ETH units, the minimum balance to keep in the account when sending eth to another account
   LOG_FILE: "wrap_log.log",
   // https://rpc.mainnet.taiko.xyz
   // https://rpc.taiko.xyz
@@ -14,6 +14,17 @@ module.exports = {
   // https://rpc.hekla.taiko.xyz
   // https://taiko-hekla.gateway.tenderly.co/7H3yO1Br2LR3cPgBu24F3c
 
+  TOKEN_ID1: 472691,
+  TOKEN_ID3: 53899,
+  TOKEN_ID2: 475474,
+  TOKEN_ID4: 475842,
+  TOKEN_ID5: 475473,
+  
+  COLLECTION_ADDRESS: "0xa20a8856e00f5ad024a55a663f06dcc419ffc4d5",
+  COUNT: 1,
+  CURRENCY_ADDRESS: "0x0000000000000000000000000000000000000000",
+  PLATFORM: "okx",
+  
   SM_ADDRESS: "0xA51894664A773981C6C112C43ce576f315d5b1B6",
   TEST_SM_WETH: '0xae2C46ddb314B9Ba743C6dEE4878F151881333D9',
 
