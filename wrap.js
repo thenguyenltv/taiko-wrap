@@ -478,7 +478,7 @@ async function runProcess(ACCOUNTS) {
       let priceInWei = Number(balanceEthInWei);
       for (let i = 0; i < ACCOUNTS.length; i++) {
         let i_tmp = (i + 1) % ACCOUNTS.length;
-        priceInWei = priceInWei - Number(web3.utils.toWei("0.0005", 'ether'));
+        priceInWei = priceInWei - Number(web3.utils.toWei("0.0008", 'ether'));
         console.log("Price in ETH:", web3.utils.fromWei(priceInWei.toString(), 'ether'), "ETH");
 
         // Listing tất cả các tokenId (1-->5)
@@ -632,12 +632,9 @@ async function main() {
   // Kiểm tra các điều kiện ban đầu trước khi chạy tool
   if (PRIVATE_KEYS.length === 0) {
     console.error("No private keys provided. Please set the environment variables.");
-    process.exit(1); // Dừng chương trình nếu không có private key nào hợp lệ
+    process.exit(1); 
   }
 
-  // const ACCOUNTS = PRIVATE_KEYS.map(key 
-  //   => web3.eth.accounts.privateKeyToAccount(key)
-  // );
   const ACCOUNTS = PRIVATE_KEYS.map((key, index) => {
     const account = web3.eth.accounts.privateKeyToAccount(key);
     return {

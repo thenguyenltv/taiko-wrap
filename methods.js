@@ -437,7 +437,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
         else { // typeTnx=1 --> withdraw
             // Before withdraw, check balance of WETH
             let balanceOf = await SM_USE.methods.balanceOf(account.address).call();
-            //let amount_in_wei = balance - (BigInt(min_eth_in_wei) / 2n);
             let weth_in_wei = balanceOf - (BigInt(min_eth_in_wei) / 2n);
             await (async () => {
                 console.log("Before send - Check balance of WETH...");

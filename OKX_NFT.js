@@ -265,9 +265,9 @@ function CheckQueryListing(
 ) {
     const data = response.data?.data?.data;
     console.log(`Data for CheckQueryListing:
-                - tokenId: ${data[0].tokenId}
-                - maker: ${data[0].maker}
-                - price: ${data[0].price}`);
+                    - tokenId: ${data[0].tokenId ?? "N/A"}
+                    - maker: ${data[0].maker ?? "N/A"}
+                    - price: ${data[0].price ?? "N/A"}`);
     let flag = true;
     if (data) {
         for (let i = 0; i < data.length; i++) {
