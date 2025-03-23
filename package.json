@@ -10,6 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "axios": "^1.8.4",
+    "crypto-js": "^4.2.0",
+    "ethers": "^6.13.5",
     "nodemailer": "^6.10.0",
     "web3": "^4.11.1"
   }
