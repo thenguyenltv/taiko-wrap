@@ -265,14 +265,13 @@ function CheckQueryListing(
 ) {
     const data = response.data?.data?.data;
     if (data.length === 0 || !data) {
-        console.log("No Data to CheckQueryListing");
         return null;
     }
     else {
         console.log(`Data to CheckQueryListing:
-            - tokenId: ${data[0].tokenId ?? "N/A"}
-            - maker: ${data[0].maker ?? "N/A"}
-            - price: ${data[0].price ?? "N/A"}`);
+        - tokenId: ${data[0].tokenId ?? "N/A"}
+        - maker: ${data[0].maker ?? "N/A"}
+        - price: ${data[0].price ?? "N/A"}`);
     }
     let flag = true;
     if (data) {
@@ -366,13 +365,13 @@ async function SignAndBuyNFT(
         console.log('transactionData:', transactionData);
 
         const signedTx = await account.signTransaction(transactionData);
-        // console.log('signedTx:', signedTx);
 
         const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
         return receipt;
 
     } catch (error) {
-        console.error("Error sending transaction:", error);
+        console.error("❌ Error excuting transaction:", error.message);
+        return null;
     }
 }
 

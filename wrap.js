@@ -167,11 +167,11 @@ async function startTransactions(SM_USE, chainID, account) {
         */
     if (current_point >= MAX_POINT_WRAP) {
       console.log("Check stop condition:", current_point, current_fee);
-      await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
+      await new Promise((resolve) => setTimeout(resolve, wait_10s));
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
         if ((balance_in_eth > MIN_BALANCE * 3 && isTnxWithdraw === 0) || tnx_count === 0) {
-          console.log("Stop Wrap/Unwrap because of reaching the limit");
+          console.log("Stop Wrap/Unwrap because of reaching the limit\n");
           return [current_point, current_fee];
         }
         else {
@@ -414,7 +414,7 @@ const processWallet = async (account) => {
     [pointsVote, feeVote] = await Voting(account, MAX_POINT_VOTE);
   }
   else {
-    console.log(`This account ${account.address} is not eligible for voting because of the last 3 characters: ${last3Char}`);
+    console.log(`This account ${shortAddress(account.address)} is not eligible for voting because of the last 3 characters: ${last3Char}`);
   }
 
   const currentTime = new Date();
@@ -478,10 +478,10 @@ async function runProcess(ACCOUNTS) {
       let priceInWei = Number(balanceEthInWei);
       for (let i = 0; i < ACCOUNTS.length; i++) {
         let i_tmp = (i + 1) % ACCOUNTS.length;
-        priceInWei = priceInWei - Number(web3.utils.toWei("0.0008", 'ether'));
+        priceInWei = priceInWei - Number(web3.utils.toWei("0.0005", 'ether'));
         console.log("Price in ETH:", web3.utils.fromWei(priceInWei.toString(), 'ether'), "ETH");
 
-        // Listing tất cả các tokenId (1-->5)
+        // Listing tất cả các tokenId 
         console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
         for (let index = 0; index < TOKEN_IDs.length; index++) {
           let index_tmp = (index + 1) % TOKEN_IDs.length;
@@ -517,7 +517,7 @@ async function runProcess(ACCOUNTS) {
               ACCOUNTS[i_tmp].privateKey,
             );
             console.log(
-              "OrderID:", res.data.data?.successOrderIds[0] !== undefined ? res.data.data?.successOrderIds[0] : "N/A"
+              "=====> OrderID:", res.data.data?.successOrderIds[0] !== undefined ? res.data.data?.successOrderIds[0] : "N/A"
             );
           } catch (error) {
             console.error("Error when try to list NFT:", error.message);
@@ -548,7 +548,7 @@ async function runProcess(ACCOUNTS) {
 
       // ================== Start Buy NFT ==================
       if (lengthOfAccounts > 1) {
-        console.log("Start buying NFT...");
+        console.log("\nStart buying NFT...");
         let orderID = null;
         for (let i = 0; i < TOKEN_IDs.length; i++) {
           const resultQuery = await GetQueryListing(
@@ -568,10 +568,10 @@ async function runProcess(ACCOUNTS) {
             nextAccount.address.toLowerCase(),
           );
           if (orderID === null) {
-            console.log("OrderID is null. Skip this transaction");
+            console.log("OrderID is null. Try to find another NFT...");
           }
           else {
-            console.log(`Found NFT with orderId: ${orderID} and the token ID is ${TOKEN_IDs[i]}\n`);
+            console.log(`Found NFT with orderId [${orderID}] and the token ID [${TOKEN_IDs[i]}]\n`);
             break;
           }
           await new Promise(r => setTimeout(r, 2000));
@@ -603,20 +603,40 @@ async function runProcess(ACCOUNTS) {
             data: inputData,
             value: value, // Giá trị cần gửi (wei)
           };
-          console.log("Transaction data:", transactionData);
-          const receipt = await SignAndBuyNFT(
-            transactionData,
-            currentAccount,
-          );
-          if(receipt !== null) {
-            console.log("Buy NFT successfully");
+
+          // Thực hiện giao dịch mua NFT
+          let attempt = 0, lastError = null;
+          const maxRetries = 5;
+          while (attempt < maxRetries) {
+            try {
+              console.log(`🔄 Attempt ${attempt + 1}/${maxRetries} to buy NFT...`);
+              const receipt = await SignAndBuyNFT(
+                transactionData,
+                currentAccount,
+              );
+              if (receipt) {
+                console.log("✅ Buy NFT successfully");
+                break;
+              }
+
+            } catch (error) {
+              lastError = error.message;
+              console.error(`❌ Buy NFT failed: ${lastError}`);
+            }
+
+            attempt++;
+            if (attempt < maxRetries) {
+              const delay = (Math.random() * 5000) + 5000; // Đợi 5-10s trước khi retry
+              console.log(`⏳ Retrying in ${delay / 1000} seconds...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
           }
-          else {
-            console.log("Buy NFT failed");
-          }
+
         }
       }
       // ================================================================================================
+
+      await new Promise(resolve => setTimeout(resolve, WAIT_60S / 12));
     }
     console.log("All wallets processed.");
   } catch (error) {
@@ -632,7 +652,7 @@ async function main() {
   // Kiểm tra các điều kiện ban đầu trước khi chạy tool
   if (PRIVATE_KEYS.length === 0) {
     console.error("No private keys provided. Please set the environment variables.");
-    process.exit(1); 
+    process.exit(1);
   }
 
   const ACCOUNTS = PRIVATE_KEYS.map((key, index) => {
