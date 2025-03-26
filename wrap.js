@@ -519,7 +519,7 @@ async function runProcess(ACCOUNTS) {
 
         const last3Char = ACCOUNTS[i].address.slice(-3).toUpperCase();
         if (last3Char !== '8F3' && last3Char !== '400' && last3Char !== 'C1D') {
-          reserveETH /= 2;
+          reserveETH = 0.0004;
         } else reserveETH = 0.0008;
 
         const newBalance = i !== 0 ? await handleError(web3.eth.getBalance(ACCOUNTS[i].address)) : 0n;
