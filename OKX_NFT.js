@@ -138,7 +138,6 @@ async function signAndSubmitOrder(
         delete types.EIP712Domain;
         delete value.totalOriginalConsiderationItems; //???
 
-
         const sign = cryptoJS.enc.Base64.stringify(
             cryptoJS.HmacSHA256(signString, secretKey)
         );
@@ -168,12 +167,13 @@ async function signAndSubmitOrder(
                 "OK-ACCESS-SIGN": sign,
             },
         });
-
-        // console.log("Submit Order Response:", submitResponse.data);
+        if (submitResponse.data.data?.successOrderIds[0] !== undefined)
+            console.log("Submit Order Response:", JSON.stringify(submitResponse.data, null, 2));
         return submitResponse;
 
     } catch (error) {
         console.error("Error when signAndSubmitOrder:", error.response ? error.response.data : error.message);
+        return null;
     }
 }
 
@@ -226,7 +226,6 @@ async function GetQueryListing(
             ...(tokenId !== null && { tokenId: tokenId }),
             ...(walletListingNFT !== null && { maker: walletListingNFT })
         };
-        // console.log("Params for GetQueryListing:", params);
 
 
         const signStr = timestamp + GET + queryListingPath + new URLSearchParams(params).toString();
@@ -324,6 +323,7 @@ async function PostBuyNFT(
         const signStr = timestamp + POST + buyOrderPath + JSON.stringify(body);
         const sign = cryptoJS.enc.Base64.stringify(cryptoJS.HmacSHA256(signStr, secretKey));
 
+
         const response = await axios.post(apiBaseUrl + buyOrderPath, body, {
             headers: {
                 'Content-Type': contentTypeAppJSon,
@@ -333,6 +333,7 @@ async function PostBuyNFT(
                 'OK-ACCESS-PASSPHRASE': passphrase,
             },
         });
+        // console.log("Buy NFT Response:", JSON.stringify(response.data, null, 2));
 
         return response;
     } catch (error) {
@@ -353,16 +354,19 @@ async function SignAndBuyNFT(
     try {
         // Điền các thông tin cần thiết cho giao dịch
         const nonce = await web3.eth.getTransactionCount(account.address, 'latest');
-        const gas_limit = 768_591n; // in gwei = 0.000007 eth
-        const max_priority_fee_per_gas = 100_000n; // in wei = 0.0001 gwei
-        const max_fee_per_gas = 50_000_000n; // in wei = 0.05 gwei
+        const gas_price = await web3.eth.getGasPrice(); // return BigInt
+        const multiGas = BigInt(Math.max(Number(gas_price / 9_000_000n), 1));
+        const gas_limit = 222_222n * multiGas * 15n / 10n; // 15% lớn hơn giá gas thực tế
+        const max_priority_fee_per_gas = gas_price * 2n; // in wei = 0.0001 gwei
+        const max_fee_per_gas = max_priority_fee_per_gas; // in wei = 0.05 gwei
         transactionData.nonce = nonce;
         transactionData.maxPriorityFeePerGas = max_priority_fee_per_gas;
         transactionData.maxFeePerGas = max_fee_per_gas;
         transactionData.gasLimit = gas_limit;
         transactionData.type = '0x2';
 
-        console.log('transactionData:', transactionData);
+        // console.log("Gas price:", gas_price);
+        // console.log('transactionData:', transactionData);
 
         const signedTx = await account.signTransaction(transactionData);
 
