@@ -378,7 +378,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             let balance = await web3.eth.getBalance(account.address);
             let amount_in_wei = balance - (BigInt(min_eth_in_wei) / 2n);
             await (async () => {
-                console.log("Before send - Check balance of WETH...");
                 let attempts = 0;
                 const maxAttempts = 5;
 
@@ -413,7 +412,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
 
             // check until balance of WETH >= amount_in_wei
             await (async () => {
-                console.log("After send - Check balance of WETH...");
                 let newBalanceOf = await SM_USE.methods.balanceOf(account.address).call();
                 const start = new Date().getTime();
                 let end, time;
@@ -439,7 +437,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
             let balanceOf = await SM_USE.methods.balanceOf(account.address).call();
             let weth_in_wei = balanceOf - (BigInt(min_eth_in_wei) / 2n);
             await (async () => {
-                console.log("Before send - Check balance of WETH...");
                 let attempts = 0;
                 const maxAttempts = 5;
 
@@ -471,7 +468,6 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
 
             // check until balance of ETH >= weth_in_wei
             await ( async () => {
-                console.log("After send - Check balance of WETH...");
 
                 let newBalance = await web3.eth.getBalance(account.address);
                 const start = new Date().getTime();
