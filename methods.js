@@ -181,7 +181,7 @@ async function cancelTransaction(account) {
     try {
         // upgrade 10% gas fee
         let gasPrice = await web3.eth.getGasPrice();
-        gasPrice = gasPrice * BigInt(110) / BigInt(100);
+        gasPrice = gasPrice * BigInt(150) / BigInt(100);
         console.log("Canceling transaction with gas price:", gasPrice);
 
         // get the latest nonce
@@ -381,6 +381,7 @@ async function DepositOrWithdraw(typeTnx, SM_USE, chainID, indexTnx, account, tn
                 let attempts = 0;
                 const maxAttempts = 5;
 
+                // Check balance in maxAttempts times
                 while (amount_in_wei < min_eth_in_wei && attempts < maxAttempts) {
                     await new Promise((resolve) => setTimeout(resolve, wait_3s));
                     balance = await web3.eth.getBalance(account.address);

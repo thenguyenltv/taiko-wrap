@@ -186,8 +186,16 @@ async function startTransactions(SM_USE, chainID, account) {
       const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
         if ((balance_in_eth > MIN_BALANCE * 3 && isTnxWithdraw === 0) || tnx_count === 0) {
-          console.log("Stop Wrap/Unwrap because of reaching the limit\n");
-          return [current_point, current_fee];
+          console.log("Check the WETH, if > MIN_BALANCE, continue to withdraw");
+          const balanceWETH = await handleError(SM_USE.methods.balanceOf(account.address).call());
+          if (convertWeiToNumber(balanceWETH) > MIN_BALANCE) {
+            isTnxWithdraw = 1;
+            console.log("--> Withdraw the last WETH...");
+          }
+          else {
+            console.log("Stop Wrap/Unwrap because of reaching the limit\n");
+            return [current_point, current_fee];
+          }
         }
         else {
           console.log("Continue to withdraw to have eth balance > MIN_BALANCE");
@@ -216,7 +224,6 @@ async function startTransactions(SM_USE, chainID, account) {
       const balance_in_eth = convertWeiToNumber(balance, 18, 5) - (MIN_BALANCE / 2);
       // First transaction
       if (isTnxWithdraw === -1) {
-        await new Promise((resolve) => setTimeout(resolve, wait_10s)); // wait 10s to starting
         if (balance_in_eth > MIN_BALANCE) {
           isTnxWithdraw = 0; // Deposit
         } else {
@@ -225,7 +232,7 @@ async function startTransactions(SM_USE, chainID, account) {
       }
 
       // ================== DepositOrWithdraw ==================
-      await new Promise((resolve) => setTimeout(resolve, wait_10s / 5));
+      await new Promise((resolve) => setTimeout(resolve, wait_10s / 2));
       [status, fee, amount, gasPrice] = await DepositOrWithdraw(isTnxWithdraw, SM_USE, chainID, tnx_count, account, duraGasPrice);
       // ================== DepositOrWithdraw ==================
 
@@ -277,7 +284,7 @@ async function startTransactions(SM_USE, chainID, account) {
         failed_tnx_count++;
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 5, the transaction will be canceled");
         if (failed_tnx_count > 5) {
-          // check isTnxWithdraw again
+          // check isTnxWithdraw again, wait for something happen
           await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
           let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
           if (tmpIsWithdraw !== isTnxWithdraw) {
@@ -292,7 +299,7 @@ async function startTransactions(SM_USE, chainID, account) {
               console.log("Cancel transaction successfully");
               tnx_count++;
               failed_tnx_count = 0;
-              await new Promise((resolve) => setTimeout(resolve, wait_10s * 3));
+              await new Promise((resolve) => setTimeout(resolve, wait_10s));
             }
 
             // web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
@@ -376,11 +383,10 @@ async function Voting(account, TOTAL_POINT = 300, TOTAL_GAS = 0) {
     [TNX_PER_BATCH, GAS_FEE_INCREASE_PERCENT] = ProcessTotalGas(remainingGas, Gas_Price);
 
     console.log('\x1b[34m%s\x1b[0m', `\nSending ${TNX_PER_BATCH} transactions with NONCE start ${NONCE}...`);
-    // await new Promise(resolve => setTimeout(resolve, 1500));
 
     [tx, fee] = await InitializeVoting(NONCE, Gas_Price, GAS_FEE_INCREASE_PERCENT);
     if (tx == null || fee == null) {
-      await new Promise(resolve => setTimeout(resolve, WAIT_25S / 6));
+      await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
       continue;
     }
 
@@ -434,25 +440,28 @@ const processWallet = async (account) => {
 
   console.log(`\nProcessing wallet: ${account.address}`);
 
-  // Start wrap/unwrap process
-  await new Promise(resolve => setTimeout(resolve, WAIT_25S / 6));
+  // ================ Start wrap/unwrap process ================
+  await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
   [pointsWrap, feeWrap] = await startTransactions(SM_USE, chainID, account);
   if (pointsWrap === null || feeWrap === null) {
     console.error("Error when wrap/unwrap process. Stop the process!!!");
     return null;
   }
-  await new Promise(resolve => setTimeout(resolve, WAIT_25S / 6));
+  // ================ End wrap/unwrap process ================
+
 
   // Start Vote process if address end with 8f3, b400, c1d
+  // ================ Start Vote process ================
   const last3Char = account.address.slice(-3).toUpperCase();
   if (last3Char === '8F3' || last3Char === '400' || last3Char === 'C1D') {
     console.log("Start voting process to earn Tnx Point...");
-    await new Promise(resolve => setTimeout(resolve, WAIT_25S / 6));
+    await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
     [pointsVote, feeVote] = await Voting(account, MAX_POINT_VOTE);
   }
   else {
     console.log(`This account ${shortAddress(account.address)} is not eligible for voting because of the last 3 characters: ${last3Char}`);
   }
+  // ================ End Vote process ================
 
   const currentTime = new Date();
   currentTime.setHours(currentTime.getHours() + 7);
@@ -519,7 +528,7 @@ async function runProcess(ACCOUNTS) {
 
         const last3Char = ACCOUNTS[i].address.slice(-3).toUpperCase();
         if (last3Char !== '8F3' && last3Char !== '400' && last3Char !== 'C1D') {
-          reserveETH = 0.0004;
+          reserveETH = 0.0003;
         } else reserveETH = 0.0008;
 
         const newBalance = i !== 0 ? await handleError(web3.eth.getBalance(ACCOUNTS[i].address)) : 0n;
@@ -532,7 +541,7 @@ async function runProcess(ACCOUNTS) {
           let index_tmp = (index + 1) % TOKEN_IDs.length;
 
           try {
-            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 12));
+            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
             const item = {
               collectionAddress: COLLECTION_ADDRESS,
               tokenId: TOKEN_IDs[index_tmp],
@@ -552,6 +561,8 @@ async function runProcess(ACCOUNTS) {
             if (!response || !response.data) {
               throw new Error("API không trả về dữ liệu hợp lệ!");
             }
+            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
+
 
             const res = await signAndSubmitOrder(
               response,
@@ -591,7 +602,7 @@ async function runProcess(ACCOUNTS) {
         break;
       }
 
-      await new Promise(resolve => setTimeout(resolve, WAIT_25S / 6));
+      await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
 
       // ================== Start Buy NFT ==================
       if (lengthOfAccounts > 1) {
@@ -662,7 +673,7 @@ async function runProcess(ACCOUNTS) {
               );
               if (receipt) {
                 console.log("✅ Buy NFT successfully");
-                await new Promise(resolve => setTimeout(resolve, WAIT_25S / 6));
+                await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
                 break;
               }
 
