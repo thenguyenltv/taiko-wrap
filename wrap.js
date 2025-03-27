@@ -12,6 +12,11 @@ const PRIVATE_KEYS = [
   process.env.KEY8,
   process.env.KEY9,
   process.env.KEY10,
+  process.env.KEY11,
+  process.env.KEY12,
+  process.env.KEY13,
+  process.env.KEY14,
+  process.env.KEY15,
 ].filter(Boolean); // Danh sách các private keys
 
 const OKX_APIs = [
@@ -24,7 +29,12 @@ const OKX_APIs = [
   process.env.OKX_API7,
   process.env.OKX_API8,
   process.env.OKX_API9,
-  process.env.OKX_API10
+  process.env.OKX_API10,
+  process.env.OKX_API11,
+  process.env.OKX_API12,
+  process.env.OKX_API13,
+  process.env.OKX_API14,
+  process.env.OKX_API15,
 ].filter(Boolean); // Danh sách các API Key của OKX
 
 const OKX_KEYs = [
@@ -37,7 +47,12 @@ const OKX_KEYs = [
   process.env.OKX_KEY7,
   process.env.OKX_KEY8,
   process.env.OKX_KEY9,
-  process.env.OKX_KEY10
+  process.env.OKX_KEY10,
+  process.env.OKX_KEY11,
+  process.env.OKX_KEY12,
+  process.env.OKX_KEY13,
+  process.env.OKX_KEY14,
+  process.env.OKX_KEY15,
 ].filter(Boolean); // Danh sách các Secret Key của OKX
 
 const OKX_PASSPHRASEs = [
@@ -50,7 +65,12 @@ const OKX_PASSPHRASEs = [
   process.env.OKX_PASSPHRASE7,
   process.env.OKX_PASSPHRASE8,
   process.env.OKX_PASSPHRASE9,
-  process.env.OKX_PASSPHRASE10
+  process.env.OKX_PASSPHRASE10,
+  process.env.OKX_PASSPHRASE11,
+  process.env.OKX_PASSPHRASE12,
+  process.env.OKX_PASSPHRASE13,
+  process.env.OKX_PASSPHRASE14,
+  process.env.OKX_PASSPHRASE15,
 ].filter(Boolean); // Danh sách các Passpharase của OKX
 
 let RPC_URL = process.env.RPC_URL;
