@@ -179,32 +179,41 @@ async function startTransactions(SM_USE, chainID, account) {
 
   let isTnxWithdraw = -1; // 0: Deposit, 1: Withdraw
   let attempt_check_balance = 0;
+
+  // Check balance of account
+  while (attempt_check_balance < 5) {
+    try {
+      const etherBalance = await handleError(web3.eth.getBalance(account.address));
+      const wrapBalance = await handleError(SM_USE.methods.balanceOf(account.address).call());
+      const totalBalance = convertWeiToNumber(etherBalance + wrapBalance);
+      if (totalBalance < MIN_BALANCE) {
+        console.error("Balance is below MIN_BALANCE. Retrying...");
+        await new Promise(r => setTimeout(r, wait_10s));
+        if (attempt_check_balance >= 5)
+          return [null, null];
+      }
+      else {
+        console.log("Balance is enough to start the process");
+        break;
+      }
+    } catch (error) {
+      console.error("Error checking balance:", error.message);
+      await new Promise(r => setTimeout(r, wait_10s));
+    }
+    attempt_check_balance++;
+  }
+
   while (true) {
 
-    // Check balance of account
-    const [etherBalance, wrapBalance] = await Promise.all([
-      handleError(web3.eth.getBalance(account.address)),
-      handleError(SM_USE.methods.balanceOf(account.address).call())
-    ]);
-    const totalBalance = convertWeiToNumber(etherBalance + wrapBalance);
-    if (totalBalance < MIN_BALANCE) {
-      console.error("Balance is below MIN_BALANCE. Retrying...");
-      await new Promise(r => setTimeout(r, wait_10s));
-      attempt_check_balance++;
-      if (attempt_check_balance > 5)
-        return [null, null];
-      continue;
-    }
-
     /** Stop Condition 
-         * 1. [Điểm vượt qua giới hạn] AND [Phí giao dịch vượt qua giới hạn]
-         * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
-        */
+       * 1. [Điểm vượt qua giới hạn] AND [Phí giao dịch vượt qua giới hạn]
+       * 2. Lượt cuối cùng phải là withdraw (để có số dư ETH > Min_Balance)
+      */
     if (current_point >= MAX_POINT_WRAP) {
       console.log("Check stop condition:", current_point, current_fee);
       await new Promise((resolve) => setTimeout(resolve, wait_10s));
-      const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
       try {
+        const balance_in_eth = convertWeiToNumber(await handleError(web3.eth.getBalance(account.address)), 18, 5);
         if ((balance_in_eth > MIN_BALANCE * 3 && isTnxWithdraw === 0) || tnx_count === 0) {
           console.log("Check the WETH, if > MIN_BALANCE, continue to withdraw");
           const balanceWETH = await handleError(SM_USE.methods.balanceOf(account.address).call());
@@ -540,9 +549,9 @@ async function runProcess(ACCOUNTS) {
 
       // Price of 1 nft is the balance of the first account 
       // minus the fee for wrap and vote in all accounts
-      // const balanceEthInWei = await handleError(web3.eth.getBalance(ACCOUNTS[0].address));
       let priceInETH = Number(highestBalance);
       let reserveETH = 0.0008;
+      
       for (let i = 0; i < ACCOUNTS.length; i++) {
         let i_tmp = (i + 1) % ACCOUNTS.length;
 
@@ -551,9 +560,14 @@ async function runProcess(ACCOUNTS) {
           reserveETH = 0.0003;
         } else reserveETH = 0.0008;
 
-        const newBalance = i !== 0 ? await handleError(web3.eth.getBalance(ACCOUNTS[i].address)) : 0n;
-        priceInETH = priceInETH - reserveETH + convertWeiToNumber(newBalance);
-        console.log("Price in ETH:", priceInETH, "ETH");
+        try {
+          const newBalance = i !== 0 ? await handleError(web3.eth.getBalance(ACCOUNTS[i].address)) : 0n;
+          priceInETH = priceInETH - reserveETH + convertWeiToNumber(newBalance);
+          console.log("Price in ETH:", priceInETH, "ETH");
+        } catch (error) {
+          console.error("Error when get balance of account:", error.message);
+          priceInETH = 0;
+        }
 
         // Listing tất cả các tokenId 
         console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
@@ -562,6 +576,7 @@ async function runProcess(ACCOUNTS) {
 
           try {
             await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
+
             const item = {
               collectionAddress: COLLECTION_ADDRESS,
               tokenId: TOKEN_IDs[index_tmp],
@@ -581,8 +596,8 @@ async function runProcess(ACCOUNTS) {
             if (!response || !response.data) {
               throw new Error("API không trả về dữ liệu hợp lệ!");
             }
-            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
 
+            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
 
             const res = await signAndSubmitOrder(
               response,
@@ -591,9 +606,12 @@ async function runProcess(ACCOUNTS) {
               ACCOUNTS[i_tmp].okx_pass,
               ACCOUNTS[i_tmp].privateKey,
             );
-            console.log(
-              "=====> OrderID:", res.data.data?.successOrderIds[0] !== undefined ? res.data.data?.successOrderIds[0] : "N/A"
-            );
+            if (res.data.data?.successOrderIds[0] === undefined) {
+              console.error("OrderID is null. Try to find another NFT...");
+            } else {
+              console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${TOKEN_IDs[index_tmp]}]\n`);
+              break;
+            }
           } catch (error) {
             console.error("Error when try to list NFT:", error.message);
           }
