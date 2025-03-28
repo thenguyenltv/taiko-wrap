@@ -323,7 +323,7 @@ async function startTransactions(SM_USE, chainID, account) {
           }
           else {
             /** Send `Cancel Transaction` */
-            const receipt = await handleError(cancelTransaction(account));
+            const receipt = await handleError(cancelTransaction(account, duraGasPrice));
             if (receipt) {
               console.log("Cancel transaction successfully");
               tnx_count++;

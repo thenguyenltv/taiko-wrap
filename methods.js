@@ -177,15 +177,14 @@ async function checkBalanceAndSetWithdraw(account) {
  * To cancel a transaction: replacing the transaction with another 0 ETH transaction 
  * with a higher (10%) gas fee sending to yourself with the same nonce as the pending transaction
  */
-async function cancelTransaction(account) {
+async function cancelTransaction(account, gasPrice) {
     try {
         // upgrade 10% gas fee
-        let gasPrice = await web3.eth.getGasPrice();
         gasPrice = gasPrice * BigInt(150) / BigInt(100);
         console.log("Canceling transaction with gas price:", gasPrice);
 
         // get the latest nonce
-        let nonce = await web3.eth.getTransactionCount(account.address, 'pending');
+        let nonce = await web3.eth.getTransactionCount(account.address);
 
         // create a new transaction with the same nonce to send to yourself (type 0)
         const tx = {
@@ -200,6 +199,7 @@ async function cancelTransaction(account) {
 
         // sign and send the transaction
         const signedTx = await account.signTransaction(tx);
+        await new Promise((resolve) => setTimeout(resolve, wait_3s / 3));
         const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
         return receipt;
     } catch (error) {
