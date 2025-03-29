@@ -243,7 +243,6 @@ async function startTransactions(SM_USE, chainID, account) {
         gasPrice = 20_000_002n;
       }
       duraGasPrice = gasPrice < min_gwei ? min_gwei : gasPrice;
-      // const gasPriceInNumber = Number(Number(web3.utils.fromWei(duraGasPrice.toString(), 'gwei')).toPrecision(2));
       const gasPriceInNumber = +Number(web3.utils.fromWei(duraGasPrice, 'gwei')).toPrecision(2);
       console.log(`~~~~~~Start wrap/unwrap of ${shortAddress(account.address)}` +
         `, gas price ${gasPriceInNumber} Gwei`
@@ -310,7 +309,7 @@ async function startTransactions(SM_USE, chainID, account) {
         }
       }
       else { /** Xu ly lenh fail --> goi ham cancelTransaction */
-        
+
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 5, the transaction will be canceled");
 
         // Check Deposit or Withdraw is done?
@@ -355,7 +354,6 @@ async function startTransactions(SM_USE, chainID, account) {
   console.log(
     `--> Time elapsed: ${hours}h${minutes}m${seconds}s\n`
   );
-}
 }
 
 /**
@@ -582,15 +580,17 @@ async function runProcess(ACCOUNTS) {
 
         // Listing tất cả các tokenId 
         console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
-        for (let index = 0; index < TOKEN_IDs.length; index++) {
-          let index_tmp = (index + 1) % TOKEN_IDs.length;
+        // khai bao mot mang de luu cac tokenId, sau do loại bo tokenId da duoc list
+        const tokenIdsToList = [...TOKEN_IDs];
+        for (let index = 0; index < tokenIdsToList.length; index++) {
+          let index_tmp = (index + 1) % tokenIdsToList.length;
 
           try {
             await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
 
             const item = {
               collectionAddress: COLLECTION_ADDRESS,
-              tokenId: TOKEN_IDs[index_tmp],
+              tokenId: tokenIdsToList[index_tmp],
               price: web3.utils.toWei(priceInETH.toString(), 'ether'),
               currencyAddress: CURRENCY_ADDRESS,
               count: COUNT,
@@ -620,7 +620,8 @@ async function runProcess(ACCOUNTS) {
             if (res.data.data?.successOrderIds[0] === undefined) {
               console.error("OrderID is null. Try to find another NFT...");
             } else {
-              console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${TOKEN_IDs[index_tmp]}]\n`);
+              console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${tokenIdsToList[index_tmp]}]\n`);
+              tokenIdsToList.splice(index, 1); // Xóa tokenId đã list khỏi danh sách
               break;
             }
           } catch (error) {
@@ -636,7 +637,6 @@ async function runProcess(ACCOUNTS) {
     for (let i = 0; i < ACCOUNTS.length; i++) {
       const currentAccount = ACCOUNTS[i];
       const nextAccount = ACCOUNTS[(i + 1) % ACCOUNTS.length]; // Tài khoản tiếp theo (xoay vòng nếu hết danh sách)
-      const pastAcount = ACCOUNTS[Math.max(i - 1, 0)];
 
       // Show account
       const ether = convertWeiToNumber(await handleError(web3.eth.getBalance(currentAccount.address)));
@@ -747,7 +747,7 @@ async function runProcess(ACCOUNTS) {
     if (error.message === 'Process terminated at 0h UTC') {
       console.log(error.message);
     } else {
-      console.error("An unexpected error occurred:", error);
+      console.error("An unexpected error occurred in runProcess function:", error.message);
     }
   }
 };
