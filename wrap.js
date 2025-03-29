@@ -310,41 +310,52 @@ async function startTransactions(SM_USE, chainID, account) {
         }
       }
       else { /** Xu ly lenh fail --> goi ham cancelTransaction */
-        failed_tnx_count++;
+        
         console.log("Number of failed transactions:", failed_tnx_count, "If it is greater than 5, the transaction will be canceled");
+
+        // Check Deposit or Withdraw is done?
+        let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
+        if (tmpIsWithdraw !== isTnxWithdraw) {
+          isTnxWithdraw = tmpIsWithdraw;
+          console.log("Update isTnxWithdraw to", tmpIsWithdraw);
+          tnx_count++;
+          failed_tnx_count = 0;
+        }
+        else failed_tnx_count++;
+
         if (failed_tnx_count > 5) {
           // check isTnxWithdraw again, wait for something happen
-          await new Promise((resolve) => setTimeout(resolve, wait_10s * 2));
-          let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
-          if (tmpIsWithdraw !== isTnxWithdraw) {
-            isTnxWithdraw = tmpIsWithdraw;
-            console.log("Update isTnxWithdraw to", tmpIsWithdraw);
-            tnx_count++;
-          }
-          else {
-            /** Send `Cancel Transaction` */
-            const receipt = await handleError(cancelTransaction(account, duraGasPrice));
-            if (receipt) {
-              console.log("Cancel transaction successfully");
-              tnx_count++;
-              failed_tnx_count = 0;
-              await new Promise((resolve) => setTimeout(resolve, wait_10s));
-            }
+          await new Promise((resolve) => setTimeout(resolve, wait_10s * 6));
+          // let tmpIsWithdraw = await checkBalanceAndSetWithdraw(account);
+          // if (tmpIsWithdraw !== isTnxWithdraw) {
+          //   isTnxWithdraw = tmpIsWithdraw;
+          //   console.log("Update isTnxWithdraw to", tmpIsWithdraw);
+          //   tnx_count++;
+          // }
+          // else {
+          //   /** Send `Cancel Transaction` */
+          //   const receipt = await handleError(cancelTransaction(account, duraGasPrice));
+          //   if (receipt) {
+          //     console.log("Cancel transaction successfully");
+          //     tnx_count++;
+          //     failed_tnx_count = 0;
+          //     await new Promise((resolve) => setTimeout(resolve, wait_10s));
+          //   }
 
-            // web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
-            // console.log("Switch to RPC:", web3.providers);
-          }
+          // web3 = new Web3(new Web3.providers.HttpProvider(ListRPC[Math.floor(Math.random() * ListRPC.length)]));
+          // console.log("Switch to RPC:", web3.providers);
         }
       }
-      isTnxWithdraw = await checkBalanceAndSetWithdraw(account);
     }
-
-    /* Print the time consumed */
-    const [hours, minutes, seconds] = logElapsedTime(start);
-    console.log(
-      `--> Time elapsed: ${hours}h${minutes}m${seconds}s\n`
-    );
+    isTnxWithdraw = await checkBalanceAndSetWithdraw(account);
   }
+
+  /* Print the time consumed */
+  const [hours, minutes, seconds] = logElapsedTime(start);
+  console.log(
+    `--> Time elapsed: ${hours}h${minutes}m${seconds}s\n`
+  );
+}
 }
 
 /**
@@ -551,7 +562,7 @@ async function runProcess(ACCOUNTS) {
       // minus the fee for wrap and vote in all accounts
       let priceInETH = Number(highestBalance);
       let reserveETH = 0.0008;
-      
+
       for (let i = 0; i < ACCOUNTS.length; i++) {
         let i_tmp = (i + 1) % ACCOUNTS.length;
 
