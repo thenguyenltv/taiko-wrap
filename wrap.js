@@ -551,6 +551,7 @@ async function runProcess(ACCOUNTS) {
       .filter(key => key.startsWith('TOKEN_ID'))
       .map(key => constants[key]);
     console.log("List of token ID:", TOKEN_IDs);
+    const tokenIdsToList = [...TOKEN_IDs];
 
     // 1. Listing nft on all accounts
     // ================================================================================================
@@ -581,16 +582,13 @@ async function runProcess(ACCOUNTS) {
         // Listing tất cả các tokenId 
         console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
         // khai bao mot mang de luu cac tokenId, sau do loại bo tokenId da duoc list
-        const tokenIdsToList = [...TOKEN_IDs];
         for (let index = 0; index < tokenIdsToList.length; index++) {
-          let index_tmp = (index + 1) % tokenIdsToList.length;
-
           try {
             await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
 
             const item = {
               collectionAddress: COLLECTION_ADDRESS,
-              tokenId: tokenIdsToList[index_tmp],
+              tokenId: tokenIdsToList[index],
               price: web3.utils.toWei(priceInETH.toString(), 'ether'),
               currencyAddress: CURRENCY_ADDRESS,
               count: COUNT,
@@ -618,9 +616,9 @@ async function runProcess(ACCOUNTS) {
               ACCOUNTS[i_tmp].privateKey,
             );
             if (res.data.data?.successOrderIds[0] === undefined) {
-              console.error("OrderID is null. Try to find another NFT...");
+              console.log("OrderID is null. Try to find another NFT...");
             } else {
-              console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${tokenIdsToList[index_tmp]}]\n`);
+              console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${tokenIdsToList[index]}]\n`);
               tokenIdsToList.splice(index, 1); // Xóa tokenId đã list khỏi danh sách
               break;
             }
