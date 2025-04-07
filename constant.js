@@ -14,14 +14,14 @@ module.exports = {
   // https://rpc.hekla.taiko.xyz
   // https://taiko-hekla.gateway.tenderly.co/7H3yO1Br2LR3cPgBu24F3c
 
-  TOKEN_ID1: 472691,
-  TOKEN_ID3: 53899,
+  // TOKEN_ID1: 472691,
+  // TOKEN_ID3: 53899,
   TOKEN_ID2: 475474,
   TOKEN_ID4: 475842,
   TOKEN_ID5: 475473,
   TOKEN_ID6: 454134,
-  TOKEN_ID7: 459488,
-  TOKEN_ID8: 249344,
+  // TOKEN_ID7: 459488,
+  // TOKEN_ID8: 249344,
   TOKEN_ID9: 46028,
   TOKEN_ID10: 455406,
   TOKEN_ID11: 48869,
