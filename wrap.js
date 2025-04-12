@@ -564,79 +564,79 @@ async function runProcess(ACCOUNTS) {
 
     // 1. Listing nft on all accounts
     // ================================================================================================
-    // if (lengthOfAccounts > 1) {
+    if (lengthOfAccounts > 1) {
 
-    //   // Price of 1 nft is the balance of the first account 
-    //   // minus the fee for wrap and vote in all accounts
-    //   let priceInETH = Number(highestBalance);
-    //   let reserveETH = 0.0008;
+      // Price of 1 nft is the balance of the first account 
+      // minus the fee for wrap and vote in all accounts
+      let priceInETH = Number(highestBalance);
+      let reserveETH = 0.0008;
 
-    //   for (let i = 0; i < ACCOUNTS.length; i++) {
-    //     let i_tmp = (i + 1) % ACCOUNTS.length;
+      for (let i = 0; i < ACCOUNTS.length; i++) {
+        let i_tmp = (i + 1) % ACCOUNTS.length;
 
-    //     const last3Char = ACCOUNTS[i].address.slice(-3).toUpperCase();
-    //     if (last3Char !== '8F3' && last3Char !== '400' && last3Char !== 'C1D') {
-    //       reserveETH = 0.0003;
-    //     } else reserveETH = 0.0008;
+        const last3Char = ACCOUNTS[i].address.slice(-3).toUpperCase();
+        if (last3Char !== '8F3' && last3Char !== '400' && last3Char !== 'C1D') {
+          reserveETH = 0.0003;
+        } else reserveETH = 0.0008;
 
-    //     try {
-    //       const newBalance = i !== 0 ? await handleError(web3.eth.getBalance(ACCOUNTS[i].address)) : 0n;
-    //       priceInETH = priceInETH - reserveETH + convertWeiToNumber(newBalance);
-    //       console.log("Price in ETH:", priceInETH, "ETH");
-    //     } catch (error) {
-    //       console.error("Error when get balance of account:", error.message);
-    //       priceInETH = 0;
-    //     }
+        try {
+          const newBalance = i !== 0 ? await handleError(web3.eth.getBalance(ACCOUNTS[i].address)) : 0n;
+          priceInETH = priceInETH - reserveETH + convertWeiToNumber(newBalance);
+          console.log("Price in ETH:", priceInETH, "ETH");
+        } catch (error) {
+          console.error("Error when get balance of account:", error.message);
+          priceInETH = 0;
+        }
 
-    //     // Listing tất cả các tokenId 
-    //     console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
-    //     // khai bao mot mang de luu cac tokenId, sau do loại bo tokenId da duoc list
-    //     for (let index = 0; index < tokenIdsToList.length; index++) {
-    //       try {
-    //         await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
+        // Listing tất cả các tokenId 
+        console.log(`\nStart listing NFT on account ${i_tmp + 1}: ${shortAddress(ACCOUNTS[i_tmp].address)}`);
+        // khai bao mot mang de luu cac tokenId, sau do loại bo tokenId da duoc list
+        for (let index = 0; index < tokenIdsToList.length; index++) {
+          try {
+            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
 
-    //         const item = {
-    //           collectionAddress: COLLECTION_ADDRESS,
-    //           tokenId: tokenIdsToList[index],
-    //           price: web3.utils.toWei(priceInETH.toString(), 'ether'),
-    //           currencyAddress: CURRENCY_ADDRESS,
-    //           count: COUNT,
-    //           platform: PLATFORM,
-    //         }
-    //         const response = await listNFT(
-    //           ACCOUNTS[i_tmp].okx_key,
-    //           ACCOUNTS[i_tmp].okx_api,
-    //           ACCOUNTS[i_tmp].okx_pass,
-    //           "taiko",
-    //           ACCOUNTS[i_tmp].address,
-    //           item,
-    //         );
-    //         if (!response || !response.data) {
-    //           throw new Error("API không trả về dữ liệu hợp lệ!");
-    //         }
+            const item = {
+              collectionAddress: COLLECTION_ADDRESS,
+              tokenId: tokenIdsToList[index],
+              price: web3.utils.toWei(priceInETH.toString(), 'ether'),
+              currencyAddress: CURRENCY_ADDRESS,
+              count: COUNT,
+              platform: PLATFORM,
+            }
+            const response = await listNFT(
+              ACCOUNTS[i_tmp].okx_key,
+              ACCOUNTS[i_tmp].okx_api,
+              ACCOUNTS[i_tmp].okx_pass,
+              "taiko",
+              ACCOUNTS[i_tmp].address,
+              item,
+            );
+            if (!response || !response.data) {
+              throw new Error("API không trả về dữ liệu hợp lệ!");
+            }
 
-    //         await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
+            await new Promise(resolve => setTimeout(resolve, WAIT_25S / 25));
 
-    //         const res = await signAndSubmitOrder(
-    //           response,
-    //           ACCOUNTS[i_tmp].okx_key,
-    //           ACCOUNTS[i_tmp].okx_api,
-    //           ACCOUNTS[i_tmp].okx_pass,
-    //           ACCOUNTS[i_tmp].privateKey,
-    //         );
-    //         if (res.data.data?.successOrderIds[0] === undefined) {
-    //           console.log("OrderID is null. Try to find another NFT...");
-    //         } else {
-    //           console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${tokenIdsToList[index]}]\n`);
-    //           tokenIdsToList.splice(index, 1); // Xóa tokenId đã list khỏi danh sách
-    //           break;
-    //         }
-    //       } catch (error) {
-    //         console.error("Error when try to list NFT:", error.message);
-    //       }
-    //     }
-    //   }
-    // }
+            const res = await signAndSubmitOrder(
+              response,
+              ACCOUNTS[i_tmp].okx_key,
+              ACCOUNTS[i_tmp].okx_api,
+              ACCOUNTS[i_tmp].okx_pass,
+              ACCOUNTS[i_tmp].privateKey,
+            );
+            if (res.data.data?.successOrderIds[0] === undefined) {
+              console.log("OrderID is null. Try to find another NFT...");
+            } else {
+              console.log(`Listed NFT with orderID [${res.data.data.successOrderIds[0]}] and the token ID [${tokenIdsToList[index]}]\n`);
+              tokenIdsToList.splice(index, 1); 
+              break;
+            }
+          } catch (error) {
+            console.error("Error when try to list NFT:", error.message);
+          }
+        }
+      }
+    }
     // ================================================================================================
 
     // 2. Start earning points from Wrap or Vote And buy NFT to transfer ETH
