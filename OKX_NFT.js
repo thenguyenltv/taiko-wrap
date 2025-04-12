@@ -245,6 +245,7 @@ async function GetQueryListing(
         return response;
     } catch (error) {
         console.error('Error querying listing:', error.response ? error.response.data : error.message);
+        return null;
     }
 }
 
