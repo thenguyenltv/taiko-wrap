@@ -539,6 +539,14 @@ async function runProcess(ACCOUNTS) {
       ACCOUNTS.splice(highestBalanceIndex, 1);
       ACCOUNTS.unshift(highestBalanceAccount);
     }
+    // console.log("List of accounts:\n", ACCOUNTS.map(account => shortAddress(account.address)).join("\n"));
+
+    // mix the list of accounts (except the first account)
+    for (let i = 1; i < ACCOUNTS.length; i++) {
+      const j = Math.floor(Math.random() * (ACCOUNTS.length - 2) + 1);
+      [ACCOUNTS[i], ACCOUNTS[j]] = [ACCOUNTS[j], ACCOUNTS[i]];
+    }
+    // console.log("List of accounts:\n", ACCOUNTS.map(account => shortAddress(account.address)).join("\n"));
 
     // First, check the balance of the 1st account
     // If the balance is less than MIN_BALANCE, stop the process
