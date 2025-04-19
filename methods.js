@@ -582,7 +582,7 @@ function ProcessTotalGas(Total_Gas, Gas_Price) {
     const GAS_FEE_INCREASE_PERCENT = Math.max(0, Math.round((MAX_GAS_FOR_1VOTE - Number(avg_gas_per_tnx)) / Number(avg_gas_per_tnx) * 100));
 
     // Tinh so luong transaction moi batch
-    let TNX_PER_BATCH = Math.floor(Math.random() * (3)) + 13;
+    let TNX_PER_BATCH = Math.floor(Math.random() * (3)) + 12;
     // Tinh so luong transaction con lai
     avg_gas_per_tnx = avg_gas_per_tnx * (GAS_FEE_INCREASE_PERCENT / 100) + avg_gas_per_tnx;
     let num_tnx = Math.ceil(Total_Gas / avg_gas_per_tnx);

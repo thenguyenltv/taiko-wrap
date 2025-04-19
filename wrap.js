@@ -437,7 +437,7 @@ async function Voting(account, TOTAL_POINT = 300, TOTAL_GAS = 0) {
         gas_consumed += parseFloat(fee);
         NONCE += BigInt(1);
         tx.nonce = NONCE;
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 4000));
       } catch (error) {
         console.error('Sending Tnx Error:', error.message);
       }
@@ -492,7 +492,7 @@ const processWallet = async (account) => {
   // Start Vote process if address end with 8f3, b400, c1d
   // ================ Start Vote process ================
   const last3Char = account.address.slice(-3).toUpperCase();
-  if (last3Char === '8F3' || last3Char === '400' || last3Char === 'C1D') {
+  if (last3Char === '8F3' || last3Char === '400') {
     console.log("Start voting process to earn Tnx Point...");
     await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
     [pointsVote, feeVote] = await Voting(account, MAX_POINT_VOTE);
