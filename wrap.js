@@ -575,7 +575,7 @@ async function runProcess(ACCOUNTS) {
         let i_tmp = (i + 1) % ACCOUNTS.length;
 
         const last3Char = ACCOUNTS[i].address.slice(-3).toUpperCase();
-        if (last3Char !== '8F3' && last3Char !== '400' && last3Char !== 'C1D') {
+        if (last3Char !== '8F3' && last3Char !== '400') {
           reserveETH = 0.0003;
         } else reserveETH = 0.0008;
 
@@ -760,6 +760,7 @@ async function runProcess(ACCOUNTS) {
     } else {
       console.error("An unexpected error occurred in runProcess function:", error.message);
     }
+    return null;
   }
 };
 
