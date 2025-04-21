@@ -151,6 +151,8 @@ const chainID = IsTestnet === true ? Testnet : Mainnet;
 const chain = chainID === Mainnet ? "taiko" : "Testnet";
 const WAIT_25S = 25000;
 
+const WALLET_VOTE = ["8f3", "b400"];
+
 const min_gwei = (MIN_GAS !== undefined && !isNaN(MIN_GAS)) ? BigInt(MIN_GAS * 10 ** 9) : MIN_GAS_PRICE;
 console.log("Min Gas Price:", web3.utils.fromWei(min_gwei.toString(), 'gwei'), "Gwei");
 
@@ -492,12 +494,18 @@ const processWallet = async (account) => {
   // Start Vote process if address end with 8f3, b400, c1d
   // ================ Start Vote process ================
   const last3Char = account.address.slice(-3).toUpperCase();
-  if (last3Char === '8F3' || last3Char === '400') {
-    console.log("Start voting process to earn Tnx Point...");
-    await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
-    [pointsVote, feeVote] = await Voting(account, MAX_POINT_VOTE);
+  let flag = false;
+  for (let i = 0; i < WALLET_VOTE.length; i++) {
+    if (last3Char === WALLET_VOTE[i].toUpperCase()) {
+      // voting
+      console.log("Start voting process to earn Tnx Point...");
+      await new Promise(resolve => setTimeout(resolve, WAIT_25S / 5));
+      [pointsVote, feeVote] = await Voting(account, MAX_POINT_VOTE);
+      flag = true;
+    }
   }
-  else {
+  if (!flag) {
+    // check if the last 3 characters are 8f3 or b400
     console.log(`This account ${shortAddress(account.address)} is not eligible for voting because of the last 3 characters: ${last3Char}`);
   }
   // ================ End Vote process ================
